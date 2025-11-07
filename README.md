@@ -35,22 +35,21 @@ This project analyzes solar energy data to predict energy production and optimiz
    ```bash
    git clone https://github.com/your-username/solar-challenge-week0.git
    cd solar-challenge-week0
-# Solar Challenge - Week 0
+# Clone the repository
+git clone https://github.com/alemayehutseganew/solar-challenge-week0.git
+cd solar-challenge-week0
 
-## Project Setup
+# Create virtual environment
+python -m venv solar_env
+source solar_env/bin/activate  # On Windows: solar_env\Scripts\activate
 
-This project analyzes solar energy data to predict energy production and optimize solar panel performance.
+# Install dependencies
+pip install pandas numpy matplotlib seaborn scipy jupyter
 
-## Environment Setup
 
-### Prerequisites
-- Python 3.8 or higher
-- Git
-- GitHub account
+# 1. Individual Country Analysis
 
-### Installation Steps
+python notebooks/benin_eda.py
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/solar-challenge-week0.git
-   cd solar-challenge-week0
+python notebooks/sierraleone_eda.py
+python notebooks/compare_countries.py
