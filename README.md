@@ -49,11 +49,11 @@ source solar_env/bin/activate  # On Windows: solar_env\Scripts\activate
 pip install pandas numpy matplotlib seaborn scipy jupyter
 
 ```
-# 1. Individual Country Analysis
+#  Individual Country Analysis and comparission
 ```bash
 
 python notebooks/benin_eda.py
-
 python notebooks/sierraleone_eda.py
+python notebooks/togo_eda.py
 python notebooks/compare_countries.py
 ```
