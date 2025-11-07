@@ -36,20 +36,24 @@ This project analyzes solar energy data to predict energy production and optimiz
    git clone https://github.com/your-username/solar-challenge-week0.git
    cd solar-challenge-week0
 # Clone the repository
+```bash
 git clone https://github.com/alemayehutseganew/solar-challenge-week0.git
 cd solar-challenge-week0
-
+```
 # Create virtual environment
 python -m venv solar_env
 source solar_env/bin/activate  # On Windows: solar_env\Scripts\activate
 
 # Install dependencies
+```bash
 pip install pandas numpy matplotlib seaborn scipy jupyter
 
-
+```
 # 1. Individual Country Analysis
+```bash
 
 python notebooks/benin_eda.py
 
 python notebooks/sierraleone_eda.py
 python notebooks/compare_countries.py
+```
