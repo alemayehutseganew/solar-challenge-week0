@@ -1,4 +1,4 @@
-# Data files
+Data files
 data/
 *.csv
 *.parquet
@@ -46,4 +46,15 @@ wheels/
 *.egg
 
 # Logs
-*.log
+*.logvenv/ 
+venv312/ 
+venv321/ 
+"data/Benin_clean.csv" 
+"data/Sierraleone_clean.csv" 
+"data/Togo_clean.csv" 
+"data/all_countries_combined.csv" 
+"data/Benin_clean.csv" 
+"data/Sierraleone_clean.csv" 
+"data/Togo_clean.csv" 
+"data/all_countries_combined.csv" 
+"data/" 
