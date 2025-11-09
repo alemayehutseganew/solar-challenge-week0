@@ -712,10 +712,108 @@ def extract_markdown_and_code(nb_path: str):
             code_cells.append(cell.source)
     return "\n\n".join(md_cells), "\n\n".join(code_cells)
 
-def create_safe_execution_environment():
-    """Create a completely safe execution environment with pre-loaded data"""
-    ns = {}
+# def create_safe_execution_environment():
+#     """Create a completely safe execution environment with pre-loaded data"""
+#     ns = {}
     
+#     # Provide essential imports
+#     ns['pd'] = pd
+#     ns['plt'] = plt
+#     ns['os'] = os
+#     ns['glob'] = glob
+#     ns['sys'] = sys
+#     ns['st'] = st
+#     ns['requests'] = requests
+#     ns['BytesIO'] = BytesIO
+#     ns['np'] = __import__('numpy')
+    
+#     # Pre-load ALL data files into the namespace
+#     progress_bar = st.progress(0)
+#     status_text = st.empty()
+    
+#     status_text.text("📥 Loading data files from Google Drive...")
+    
+#     # Load Benin data
+#     benin_data = load_csv_from_gdrive("benin-malanville.csv")
+#     if benin_data is not None:
+#         ns['benin_df'] = benin_data
+#         ns['df_benin'] = benin_data
+#         ns['benin_data'] = benin_data
+#     progress_bar.progress(20)
+    
+#     # Load Sierra Leone data
+#     sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
+#     if sierra_data is not None:
+#         ns['sierraleone_df'] = sierra_data
+#         ns['df_sierra'] = sierra_data
+#         ns['sierra_data'] = sierra_data
+#         ns['sierraleone_data'] = sierra_data
+#     progress_bar.progress(40)
+    
+#     # Load Togo data
+#     togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
+#     if togo_data is not None:
+#         ns['togo_df'] = togo_data
+#         ns['df_togo'] = togo_data
+#         ns['togo_data'] = togo_data
+#     progress_bar.progress(60)
+    
+#     # Load clean data versions
+#     benin_clean = load_csv_from_gdrive("Benin_clean.csv")
+#     if benin_clean is not None:
+#         ns['benin_clean'] = benin_clean
+#         ns['df_benin_clean'] = benin_clean
+    
+#     sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
+#     if sierra_clean is not None:
+#         ns['sierraleone_clean'] = sierra_clean
+#         ns['df_sierra_clean'] = sierra_clean
+#     progress_bar.progress(80)
+    
+#     togo_clean = load_csv_from_gdrive("Togo_clean.csv")
+#     if togo_clean is not None:
+#         ns['togo_clean'] = togo_clean
+#         ns['df_togo_clean'] = togo_clean
+#     progress_bar.progress(100)
+    
+#     status_text.text("✅ All data loaded successfully!")
+#     time.sleep(0.5)  # Brief pause to show completion
+#     status_text.empty()
+#     progress_bar.empty()
+    
+#     # Add data loading functions that return the pre-loaded data
+#     def load_benin_data():
+#         return ns.get('benin_df')
+    
+#     def load_sierraleone_data():
+#         return ns.get('sierraleone_df')
+    
+#     def load_togo_data():
+#         return ns.get('togo_df')
+    
+#     def load_benin_clean():
+#         return ns.get('benin_clean')
+    
+#     def load_sierraleone_clean():
+#         return ns.get('sierraleone_clean')
+    
+#     def load_togo_clean():
+#         return ns.get('togo_clean')
+    
+#     # Add helper functions to namespace
+#     ns['load_benin_data'] = load_benin_data
+#     ns['load_sierraleone_data'] = load_sierraleone_data
+#     ns['load_togo_data'] = load_togo_data
+#     ns['load_benin_clean'] = load_benin_clean
+#     ns['load_sierraleone_clean'] = load_sierraleone_clean
+#     ns['load_togo_clean'] = load_togo_clean
+    
+#     return ns
+@st.cache_resource
+def create_safe_execution_environment():
+    """Create a safe environment with pre-loaded data (cached, loaded only once)."""
+    ns = {}
+
     # Provide essential imports
     ns['pd'] = pd
     ns['plt'] = plt
@@ -726,89 +824,25 @@ def create_safe_execution_environment():
     ns['requests'] = requests
     ns['BytesIO'] = BytesIO
     ns['np'] = __import__('numpy')
-    
-    # Pre-load ALL data files into the namespace
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    status_text.text("📥 Loading data files from Google Drive...")
-    
-    # Load Benin data
-    benin_data = load_csv_from_gdrive("benin-malanville.csv")
-    if benin_data is not None:
-        ns['benin_df'] = benin_data
-        ns['df_benin'] = benin_data
-        ns['benin_data'] = benin_data
-    progress_bar.progress(20)
-    
-    # Load Sierra Leone data
-    sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
-    if sierra_data is not None:
-        ns['sierraleone_df'] = sierra_data
-        ns['df_sierra'] = sierra_data
-        ns['sierra_data'] = sierra_data
-        ns['sierraleone_data'] = sierra_data
-    progress_bar.progress(40)
-    
-    # Load Togo data
-    togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
-    if togo_data is not None:
-        ns['togo_df'] = togo_data
-        ns['df_togo'] = togo_data
-        ns['togo_data'] = togo_data
-    progress_bar.progress(60)
-    
-    # Load clean data versions
-    benin_clean = load_csv_from_gdrive("Benin_clean.csv")
-    if benin_clean is not None:
-        ns['benin_clean'] = benin_clean
-        ns['df_benin_clean'] = benin_clean
-    
-    sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
-    if sierra_clean is not None:
-        ns['sierraleone_clean'] = sierra_clean
-        ns['df_sierra_clean'] = sierra_clean
-    progress_bar.progress(80)
-    
-    togo_clean = load_csv_from_gdrive("Togo_clean.csv")
-    if togo_clean is not None:
-        ns['togo_clean'] = togo_clean
-        ns['df_togo_clean'] = togo_clean
-    progress_bar.progress(100)
-    
-    status_text.text("✅ All data loaded successfully!")
-    time.sleep(0.5)  # Brief pause to show completion
-    status_text.empty()
-    progress_bar.empty()
-    
-    # Add data loading functions that return the pre-loaded data
-    def load_benin_data():
-        return ns.get('benin_df')
-    
-    def load_sierraleone_data():
-        return ns.get('sierraleone_df')
-    
-    def load_togo_data():
-        return ns.get('togo_df')
-    
-    def load_benin_clean():
-        return ns.get('benin_clean')
-    
-    def load_sierraleone_clean():
-        return ns.get('sierraleone_clean')
-    
-    def load_togo_clean():
-        return ns.get('togo_clean')
-    
-    # Add helper functions to namespace
-    ns['load_benin_data'] = load_benin_data
-    ns['load_sierraleone_data'] = load_sierraleone_data
-    ns['load_togo_data'] = load_togo_data
-    ns['load_benin_clean'] = load_benin_clean
-    ns['load_sierraleone_clean'] = load_sierraleone_clean
-    ns['load_togo_clean'] = load_togo_clean
-    
+
+    # Load data once (cached)
+    ns['benin_df'] = load_csv_from_gdrive("benin-malanville.csv")
+    ns['sierraleone_df'] = load_csv_from_gdrive("sierraleone-bumbuna.csv")
+    ns['togo_df'] = load_csv_from_gdrive("togo-dapaong_qc.csv")
+    ns['benin_clean'] = load_csv_from_gdrive("Benin_clean.csv")
+    ns['sierraleone_clean'] = load_csv_from_gdrive("Sierraleone_clean.csv")
+    ns['togo_clean'] = load_csv_from_gdrive("Togo_clean.csv")
+
+    # Aliases for compatibility
+    ns['df_benin'] = ns['benin_df']
+    ns['df_sierra'] = ns['sierraleone_df']
+    ns['df_togo'] = ns['togo_df']
+    ns['df_benin_clean'] = ns['benin_clean']
+    ns['df_sierra_clean'] = ns['sierraleone_clean']
+    ns['df_togo_clean'] = ns['togo_clean']
+
     return ns
+
 
 def remove_file_loading_code(code: str):
     """Remove all file loading code from the notebook and replace with safe alternatives"""
