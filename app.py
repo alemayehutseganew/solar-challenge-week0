@@ -55,7 +55,7 @@
 
 # @st.cache_data(ttl=3600)  # Cache for 1 hour
 # def download_from_gdrive(file_id):
-#     """Download file from Google Drive and return as BytesIO object"""
+#     """Download file from external provided source and return as BytesIO object"""
 #     URL = "https://drive.google.com/uc?export=download&id="
     
 #     try:
@@ -74,7 +74,7 @@
 
 # @st.cache_data(ttl=3600)
 # def load_csv_from_gdrive(filename):
-#     """Load CSV file from Google Drive with caching"""
+#     """Load CSV file from external provided source with caching"""
 #     if filename in GDRIVE_DATA_IDS:
 #         file_content = download_from_gdrive(GDRIVE_DATA_IDS[filename])
 #         if file_content is not None:
@@ -87,7 +87,7 @@
 
 # @st.cache_data(ttl=3600)
 # def load_notebook_from_gdrive(notebook_name):
-#     """Load notebook file from Google Drive with caching"""
+#     """Load notebook file from external provided source with caching"""
 #     if notebook_name in GDRIVE_NOTEBOOK_IDS:
 #         file_content = download_from_gdrive(GDRIVE_NOTEBOOK_IDS[notebook_name])
 #         if file_content is not None:
@@ -152,7 +152,7 @@
 #     progress_bar = st.progress(0)
 #     status_text = st.empty()
     
-#     status_text.text("📥 Loading data files from Google Drive...")
+#     status_text.text("📥 Loading data files from external provided source...")
     
 #     # Load Benin data
 #     benin_data = load_csv_from_gdrive("benin-malanville.csv")
@@ -371,7 +371,7 @@
 #     return {'namespace': ns, 'dataframes': dfs, 'safe_code': safe_code}
 
 # def list_csvs():
-#     """List available CSV files from Google Drive"""
+#     """List available CSV files from external provided source"""
 #     return list(GDRIVE_DATA_IDS.keys())
 
 # def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
@@ -456,7 +456,7 @@
 # # with st.sidebar.expander("Debug Info"):
 # #     st.write("Current working directory:", os.getcwd())
 # #     st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
-# #     st.write("Available CSV files from Google Drive:", csv_files)
+# #     st.write("Available CSV files from external provided source:", csv_files)
 
 # # Map simple labels for the user
 # label_map = {}
@@ -480,11 +480,11 @@
 
 # # Display notebook source information
 # notebook_name = nb_path.replace("gdrive:", "")
-# st.markdown(f"**Notebook:** `{notebook_name}` (from Google Drive)")
+# st.markdown(f"**Notebook:** `{notebook_name}` (from external provided source)")
 
 # # Display available CSV files in sidebar
 # if csv_files:
-#     st.sidebar.subheader("Available Data Files (from Google Drive)")
+#     st.sidebar.subheader("Available Data Files (from external provided source)")
 #     for csv_file in csv_files:
 #         st.sidebar.write(f"- {csv_file}")
 # else:
@@ -500,7 +500,7 @@
 # with st.expander('Show cleaned code (for debugging)'):
 #     safe_code = remove_file_loading_code(code_text)
 #     st.code(safe_code)
-#     st.info("Note: All file loading operations have been removed. Data is pre-loaded from Google Drive.")
+#     st.info("Note: All file loading operations have been removed. Data is pre-loaded from external provided source.")
 
 # # Pre-execution check for file loading patterns
 # file_loading_detected = any(pattern in code_text for pattern in [
@@ -523,7 +523,7 @@
 
 # # Try to execute code and collect dataframes
 # if st.button('Execute Notebook Code', type='primary'):
-#     with st.spinner('Loading data from Google Drive and executing notebook...'):
+#     with st.spinner('Loading data from external provided source and executing notebook...'):
 #         result = exec_code_collect_dfs(code_text, notebook_name)
 
 #     dfs = result.get('dataframes', {})
@@ -591,7 +591,7 @@
 # st.markdown('---')
 # st.info(f'''
 # **Notes:** 
-# - All notebooks and data files are loaded directly from Google Drive
+# - All notebooks and data files are loaded directly from external provided source
 # - No local file access - completely bypasses file system errors
 # - Data is pre-loaded before notebook execution
 # - File loading operations in notebooks are automatically removed
@@ -658,9 +658,9 @@ GDRIVE_NOTEBOOK_IDS = {
 
 # CACHE EVERYTHING HEAVY
 
-@st.cache_data(ttl=3600, show_spinner="Downloading from Google Drive...")
+@st.cache_data(ttl=3600, show_spinner="Downloading from external provided source...")
 def download_from_gdrive(file_id):
-    """Download file from Google Drive and return as BytesIO object"""
+    """Download file from external provided source and return as BytesIO object"""
     URL = "https://drive.google.com/uc?export=download&id="
     
     try:
@@ -679,7 +679,7 @@ def download_from_gdrive(file_id):
 
 @st.cache_data(ttl=3600, show_spinner="Loading CSV data...")
 def load_csv_from_gdrive(filename):
-    """Load CSV file from Google Drive with caching"""
+    """Load CSV file from external provided source with caching"""
     if filename in GDRIVE_DATA_IDS:
         file_content = download_from_gdrive(GDRIVE_DATA_IDS[filename])
         if file_content is not None:
@@ -692,7 +692,7 @@ def load_csv_from_gdrive(filename):
 
 @st.cache_data(ttl=3600, show_spinner="Loading notebook...")
 def load_notebook_from_gdrive(notebook_name):
-    """Load notebook file from Google Drive with caching"""
+    """Load notebook file from external provided source with caching"""
     if notebook_name in GDRIVE_NOTEBOOK_IDS:
         file_content = download_from_gdrive(GDRIVE_NOTEBOOK_IDS[notebook_name])
         if file_content is not None:
@@ -979,7 +979,7 @@ def exec_code_collect_dfs(_ns, code: str, notebook_name: str):
 
 @st.cache_data(show_spinner=False)
 def list_csvs():
-    """List available CSV files from Google Drive"""
+    """List available CSV files from external provided source"""
     return list(GDRIVE_DATA_IDS.keys())
 
 def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
@@ -1084,11 +1084,11 @@ nb_path = label_map[selection]
 
 # Display notebook source information
 notebook_name = nb_path.replace("gdrive:", "")
-st.markdown(f"**Notebook:** `{notebook_name}` (from Google Drive)")
+st.markdown(f"**Notebook:** `{notebook_name}` (from external provided source)")
 
 # Display available CSV files in sidebar
 if csv_files:
-    st.sidebar.subheader("Available Data Files (from Google Drive)")
+    st.sidebar.subheader("Available Data Files (from external provided source)")
     for csv_file in csv_files:
         st.sidebar.write(f"- {csv_file}")
 else:
@@ -1104,7 +1104,7 @@ if md_text:
 with st.expander('Show cleaned code (for debugging)'):
     safe_code = remove_file_loading_code(code_text)
     st.code(safe_code)
-    st.info("Note: All file loading operations have been removed. Data is pre-loaded from Google Drive.")
+    st.info("Note: All file loading operations have been removed. Data is pre-loaded from external provided source.")
 
 # Try to execute code and collect dataframes
 if st.button('Execute Notebook Code', type='primary'):
@@ -1179,7 +1179,7 @@ if csv_files:
 st.markdown('---')
 st.info(f'''
 **Notes:** 
-- All notebooks and data files are loaded directly from Google Drive
+- All notebooks and data files are loaded directly from external provided source
 - No local file access - completely bypasses file system errors
 - Data is pre-loaded before notebook execution
 - File loading operations in notebooks are automatically removed
