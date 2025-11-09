@@ -13,11 +13,20 @@
 # import requests
 # from io import BytesIO
 # import re
+# import time
 
-# st.set_page_config(page_title="Solar Challenge EDA Dashboard", layout="wide")
+# # Configure Streamlit page with improved settings
+# st.set_page_config(
+#     page_title="Solar Challenge EDA Dashboard", 
+#     layout="wide",
+#     initial_sidebar_state="expanded"
+# )
 
 # HEADER = "Solar Challenge EDA Dashboard — Benin / Sierra Leone / Togo / Comparison"
 # st.title(HEADER)
+
+# # Add a startup message to help with connection issues
+# st.sidebar.info("🔧 If you see connection errors, try refreshing the page.")
 
 # # Google Drive File IDs for DATA files
 # GDRIVE_DATA_IDS = {
@@ -44,14 +53,15 @@
 #     "compare_countries.ipynb"
 # ]
 
-# @st.cache_data
+# @st.cache_data(ttl=3600)  # Cache for 1 hour
 # def download_from_gdrive(file_id):
 #     """Download file from Google Drive and return as BytesIO object"""
 #     URL = "https://drive.google.com/uc?export=download&id="
     
 #     try:
 #         session = requests.Session()
-#         response = session.get(URL + file_id, stream=True)
+#         # Add retry logic and timeout
+#         response = session.get(URL + file_id, stream=True, timeout=30)
         
 #         if response.status_code == 200:
 #             return BytesIO(response.content)
@@ -62,7 +72,7 @@
 #         st.error(f"Error downloading file {file_id}: {str(e)}")
 #         return None
 
-# @st.cache_data
+# @st.cache_data(ttl=3600)
 # def load_csv_from_gdrive(filename):
 #     """Load CSV file from Google Drive with caching"""
 #     if filename in GDRIVE_DATA_IDS:
@@ -75,7 +85,7 @@
 #                 return None
 #     return None
 
-# @st.cache_data
+# @st.cache_data(ttl=3600)
 # def load_notebook_from_gdrive(notebook_name):
 #     """Load notebook file from Google Drive with caching"""
 #     if notebook_name in GDRIVE_NOTEBOOK_IDS:
@@ -139,7 +149,10 @@
 #     ns['np'] = __import__('numpy')
     
 #     # Pre-load ALL data files into the namespace
-#     st.info("📥 Loading all data files from Google Drive...")
+#     progress_bar = st.progress(0)
+#     status_text = st.empty()
+    
+#     status_text.text("📥 Loading data files from Google Drive...")
     
 #     # Load Benin data
 #     benin_data = load_csv_from_gdrive("benin-malanville.csv")
@@ -147,7 +160,7 @@
 #         ns['benin_df'] = benin_data
 #         ns['df_benin'] = benin_data
 #         ns['benin_data'] = benin_data
-#         st.success("✅ Benin data loaded")
+#     progress_bar.progress(20)
     
 #     # Load Sierra Leone data
 #     sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
@@ -156,7 +169,7 @@
 #         ns['df_sierra'] = sierra_data
 #         ns['sierra_data'] = sierra_data
 #         ns['sierraleone_data'] = sierra_data
-#         st.success("✅ Sierra Leone data loaded")
+#     progress_bar.progress(40)
     
 #     # Load Togo data
 #     togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
@@ -164,26 +177,30 @@
 #         ns['togo_df'] = togo_data
 #         ns['df_togo'] = togo_data
 #         ns['togo_data'] = togo_data
-#         st.success("✅ Togo data loaded")
+#     progress_bar.progress(60)
     
 #     # Load clean data versions
 #     benin_clean = load_csv_from_gdrive("Benin_clean.csv")
 #     if benin_clean is not None:
 #         ns['benin_clean'] = benin_clean
 #         ns['df_benin_clean'] = benin_clean
-#         st.success("✅ Benin clean data loaded")
     
 #     sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
 #     if sierra_clean is not None:
 #         ns['sierraleone_clean'] = sierra_clean
 #         ns['df_sierra_clean'] = sierra_clean
-#         st.success("✅ Sierra Leone clean data loaded")
+#     progress_bar.progress(80)
     
 #     togo_clean = load_csv_from_gdrive("Togo_clean.csv")
 #     if togo_clean is not None:
 #         ns['togo_clean'] = togo_clean
 #         ns['df_togo_clean'] = togo_clean
-#         st.success("✅ Togo clean data loaded")
+#     progress_bar.progress(100)
+    
+#     status_text.text("✅ All data loaded successfully!")
+#     time.sleep(0.5)  # Brief pause to show completion
+#     status_text.empty()
+#     progress_bar.empty()
     
 #     # Add data loading functions that return the pre-loaded data
 #     def load_benin_data():
@@ -223,8 +240,8 @@
 #     while i < len(lines):
 #         line = lines[i]
         
-#         # Skip empty lines
-#         if not line.strip():
+#         # Skip empty lines and comments
+#         if not line.strip() or line.strip().startswith('#'):
 #             cleaned_lines.append(line)
 #             i += 1
 #             continue
@@ -273,21 +290,22 @@
 #                     indent = len(line) - len(line.lstrip())
                     
 #                     # Try to infer which dataset to use based on the filename in the line
-#                     if 'benin' in line.lower() and 'clean' in line.lower():
+#                     line_lower = line.lower()
+#                     if 'benin' in line_lower and 'clean' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_clean  # FILE LOADING REPLACED: Using pre-loaded Benin clean data")
-#                     elif 'benin' in line.lower():
+#                     elif 'benin' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_df  # FILE LOADING REPLACED: Using pre-loaded Benin data")
-#                     elif 'sierra' in line.lower() and 'clean' in line.lower():
+#                     elif 'sierra' in line_lower and 'clean' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_clean  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone clean data")
-#                     elif 'sierra' in line.lower():
+#                     elif 'sierra' in line_lower or 'sierraleone' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_df  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone data")
-#                     elif 'togo' in line.lower() and 'clean' in line.lower():
+#                     elif 'togo' in line_lower and 'clean' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_clean  # FILE LOADING REPLACED: Using pre-loaded Togo clean data")
-#                     elif 'togo' in line.lower():
+#                     elif 'togo' in line_lower:
 #                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_df  # FILE LOADING REPLACED: Using pre-loaded Togo data")
 #                     else:
-#                         # Generic replacement
-#                         cleaned_lines.append(f"{' ' * indent}{var_name} = None  # FILE LOADING DISABLED: Data pre-loaded - use available datasets")
+#                         # Generic replacement - use first available dataset
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_df  # FILE LOADING REPLACED: Using pre-loaded data (default: Benin)")
 #                 else:
 #                     cleaned_lines.append(f"# {line}  # FILE LOADING DISABLED")
 #             else:
@@ -313,7 +331,9 @@
     
 #     try:
 #         # Execute the safe code (without file loading operations)
-#         exec(safe_code, ns)
+#         with st.spinner('Executing notebook code...'):
+#             exec(safe_code, ns)
+#         st.success("✅ Notebook executed successfully!")
         
 #     except Exception as e:
 #         st.warning("Notebook code execution failed. See error details below.")
@@ -432,11 +452,11 @@
 # notebooks = find_notebooks()
 # csv_files = list_csvs()
 
-# # Debug information
-# with st.sidebar.expander("Debug Info"):
-#     st.write("Current working directory:", os.getcwd())
-#     st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
-#     st.write("Available CSV files from Google Drive:", csv_files)
+# # # Debug information
+# # with st.sidebar.expander("Debug Info"):
+# #     st.write("Current working directory:", os.getcwd())
+# #     st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
+# #     st.write("Available CSV files from Google Drive:", csv_files)
 
 # # Map simple labels for the user
 # label_map = {}
@@ -487,22 +507,22 @@
 #     "pd.read_csv", ".csv", "open(", "with open(", "read_csv", "to_csv"
 # ])
 
-# if file_loading_detected:
-#     st.warning("""
-#     ⚠️ **File operations detected**
+# # if file_loading_detected:
+# #     st.warning("""
+# #     ⚠️ **File operations detected**
     
-#     The notebook contains file operations that will be automatically handled:
+# #     The notebook contains file operations that will be automatically handled:
     
-#     - **File loading:** Replaced with pre-loaded data variables
-#     - **File saving:** Disabled - use download buttons in the app instead
+# #     - **File loading:** Replaced with pre-loaded data variables
+# #     - **File saving:** Disabled - use download buttons in the app instead
     
-#     **Available pre-loaded data:**
-#     - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
-#     - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
-#     """)
+# #     **Available pre-loaded data:**
+# #     - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
+# #     - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
+# #     """)
 
 # # Try to execute code and collect dataframes
-# if st.button('Execute Notebook Code'):
+# if st.button('Execute Notebook Code', type='primary'):
 #     with st.spinner('Loading data from Google Drive and executing notebook...'):
 #         result = exec_code_collect_dfs(code_text, notebook_name)
 
@@ -577,7 +597,18 @@
 # - File loading operations in notebooks are automatically removed
 # - File saving operations are disabled (use download buttons instead)
 # - Uses cached downloads for better performance
+# - If you see connection errors, try refreshing the page
 # ''')
+
+# # Add a clear cache button for troubleshooting
+# if st.sidebar.button("Clear Cache (for troubleshooting)"):
+#     st.cache_data.clear()
+#     st.sidebar.success("Cache cleared! Refresh the page.")
+
+
+
+
+
 
 import streamlit as st
 import nbformat
@@ -625,14 +656,9 @@ GDRIVE_NOTEBOOK_IDS = {
     "compare_countries.ipynb": "1nd0EyrkNupPqkrpxpOEEx9pME39w0uoV"
 }
 
-NOTEBOOK_PATTERNS = [
-    "benin_eda.ipynb",
-    "sierraleone_eda.ipynb", 
-    "Togo_eda.ipynb",
-    "compare_countries.ipynb"
-]
+# CACHE EVERYTHING HEAVY
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=3600, show_spinner="Downloading from Google Drive...")
 def download_from_gdrive(file_id):
     """Download file from Google Drive and return as BytesIO object"""
     URL = "https://drive.google.com/uc?export=download&id="
@@ -651,7 +677,7 @@ def download_from_gdrive(file_id):
         st.error(f"Error downloading file {file_id}: {str(e)}")
         return None
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Loading CSV data...")
 def load_csv_from_gdrive(filename):
     """Load CSV file from Google Drive with caching"""
     if filename in GDRIVE_DATA_IDS:
@@ -664,7 +690,7 @@ def load_csv_from_gdrive(filename):
                 return None
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Loading notebook...")
 def load_notebook_from_gdrive(notebook_name):
     """Load notebook file from Google Drive with caching"""
     if notebook_name in GDRIVE_NOTEBOOK_IDS:
@@ -678,7 +704,7 @@ def load_notebook_from_gdrive(notebook_name):
                 st.error(f"Error loading notebook {notebook_name}: {str(e)}")
     return None
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def find_notebooks():
     """Look for notebooks in Google Drive only"""
     nb_paths = []
@@ -689,6 +715,7 @@ def find_notebooks():
     
     return sorted(list(set(nb_paths)))
 
+@st.cache_data(show_spinner=False)
 def extract_markdown_and_code(nb_path: str):
     """Return (markdown_text, combined_code) from notebook file."""
     try:
@@ -712,108 +739,11 @@ def extract_markdown_and_code(nb_path: str):
             code_cells.append(cell.source)
     return "\n\n".join(md_cells), "\n\n".join(code_cells)
 
-# def create_safe_execution_environment():
-#     """Create a completely safe execution environment with pre-loaded data"""
-#     ns = {}
-    
-#     # Provide essential imports
-#     ns['pd'] = pd
-#     ns['plt'] = plt
-#     ns['os'] = os
-#     ns['glob'] = glob
-#     ns['sys'] = sys
-#     ns['st'] = st
-#     ns['requests'] = requests
-#     ns['BytesIO'] = BytesIO
-#     ns['np'] = __import__('numpy')
-    
-#     # Pre-load ALL data files into the namespace
-#     progress_bar = st.progress(0)
-#     status_text = st.empty()
-    
-#     status_text.text("📥 Loading data files from Google Drive...")
-    
-#     # Load Benin data
-#     benin_data = load_csv_from_gdrive("benin-malanville.csv")
-#     if benin_data is not None:
-#         ns['benin_df'] = benin_data
-#         ns['df_benin'] = benin_data
-#         ns['benin_data'] = benin_data
-#     progress_bar.progress(20)
-    
-#     # Load Sierra Leone data
-#     sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
-#     if sierra_data is not None:
-#         ns['sierraleone_df'] = sierra_data
-#         ns['df_sierra'] = sierra_data
-#         ns['sierra_data'] = sierra_data
-#         ns['sierraleone_data'] = sierra_data
-#     progress_bar.progress(40)
-    
-#     # Load Togo data
-#     togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
-#     if togo_data is not None:
-#         ns['togo_df'] = togo_data
-#         ns['df_togo'] = togo_data
-#         ns['togo_data'] = togo_data
-#     progress_bar.progress(60)
-    
-#     # Load clean data versions
-#     benin_clean = load_csv_from_gdrive("Benin_clean.csv")
-#     if benin_clean is not None:
-#         ns['benin_clean'] = benin_clean
-#         ns['df_benin_clean'] = benin_clean
-    
-#     sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
-#     if sierra_clean is not None:
-#         ns['sierraleone_clean'] = sierra_clean
-#         ns['df_sierra_clean'] = sierra_clean
-#     progress_bar.progress(80)
-    
-#     togo_clean = load_csv_from_gdrive("Togo_clean.csv")
-#     if togo_clean is not None:
-#         ns['togo_clean'] = togo_clean
-#         ns['df_togo_clean'] = togo_clean
-#     progress_bar.progress(100)
-    
-#     status_text.text("✅ All data loaded successfully!")
-#     time.sleep(0.5)  # Brief pause to show completion
-#     status_text.empty()
-#     progress_bar.empty()
-    
-#     # Add data loading functions that return the pre-loaded data
-#     def load_benin_data():
-#         return ns.get('benin_df')
-    
-#     def load_sierraleone_data():
-#         return ns.get('sierraleone_df')
-    
-#     def load_togo_data():
-#         return ns.get('togo_df')
-    
-#     def load_benin_clean():
-#         return ns.get('benin_clean')
-    
-#     def load_sierraleone_clean():
-#         return ns.get('sierraleone_clean')
-    
-#     def load_togo_clean():
-#         return ns.get('togo_clean')
-    
-#     # Add helper functions to namespace
-#     ns['load_benin_data'] = load_benin_data
-#     ns['load_sierraleone_data'] = load_sierraleone_data
-#     ns['load_togo_data'] = load_togo_data
-#     ns['load_benin_clean'] = load_benin_clean
-#     ns['load_sierraleone_clean'] = load_sierraleone_clean
-#     ns['load_togo_clean'] = load_togo_clean
-    
-#     return ns
-@st.cache_resource
+@st.cache_resource(show_spinner="Creating execution environment...")
 def create_safe_execution_environment():
-    """Create a safe environment with pre-loaded data (cached, loaded only once)."""
+    """Create a completely safe execution environment with pre-loaded data"""
     ns = {}
-
+    
     # Provide essential imports
     ns['pd'] = pd
     ns['plt'] = plt
@@ -824,26 +754,75 @@ def create_safe_execution_environment():
     ns['requests'] = requests
     ns['BytesIO'] = BytesIO
     ns['np'] = __import__('numpy')
-
-    # Load data once (cached)
-    ns['benin_df'] = load_csv_from_gdrive("benin-malanville.csv")
-    ns['sierraleone_df'] = load_csv_from_gdrive("sierraleone-bumbuna.csv")
-    ns['togo_df'] = load_csv_from_gdrive("togo-dapaong_qc.csv")
-    ns['benin_clean'] = load_csv_from_gdrive("Benin_clean.csv")
-    ns['sierraleone_clean'] = load_csv_from_gdrive("Sierraleone_clean.csv")
-    ns['togo_clean'] = load_csv_from_gdrive("Togo_clean.csv")
-
-    # Aliases for compatibility
-    ns['df_benin'] = ns['benin_df']
-    ns['df_sierra'] = ns['sierraleone_df']
-    ns['df_togo'] = ns['togo_df']
-    ns['df_benin_clean'] = ns['benin_clean']
-    ns['df_sierra_clean'] = ns['sierraleone_clean']
-    ns['df_togo_clean'] = ns['togo_clean']
-
+    
+    # Pre-load ALL data files into the namespace using cached functions
+    benin_data = load_csv_from_gdrive("benin-malanville.csv")
+    if benin_data is not None:
+        ns['benin_df'] = benin_data
+        ns['df_benin'] = benin_data
+        ns['benin_data'] = benin_data
+    
+    # Load Sierra Leone data
+    sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
+    if sierra_data is not None:
+        ns['sierraleone_df'] = sierra_data
+        ns['df_sierra'] = sierra_data
+        ns['sierra_data'] = sierra_data
+        ns['sierraleone_data'] = sierra_data
+    
+    # Load Togo data
+    togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
+    if togo_data is not None:
+        ns['togo_df'] = togo_data
+        ns['df_togo'] = togo_data
+        ns['togo_data'] = togo_data
+    
+    # Load clean data versions
+    benin_clean = load_csv_from_gdrive("Benin_clean.csv")
+    if benin_clean is not None:
+        ns['benin_clean'] = benin_clean
+        ns['df_benin_clean'] = benin_clean
+    
+    sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
+    if sierra_clean is not None:
+        ns['sierraleone_clean'] = sierra_clean
+        ns['df_sierra_clean'] = sierra_clean
+    
+    togo_clean = load_csv_from_gdrive("Togo_clean.csv")
+    if togo_clean is not None:
+        ns['togo_clean'] = togo_clean
+        ns['df_togo_clean'] = togo_clean
+    
+    # Add data loading functions that return the pre-loaded data
+    def load_benin_data():
+        return ns.get('benin_df')
+    
+    def load_sierraleone_data():
+        return ns.get('sierraleone_df')
+    
+    def load_togo_data():
+        return ns.get('togo_df')
+    
+    def load_benin_clean():
+        return ns.get('benin_clean')
+    
+    def load_sierraleone_clean():
+        return ns.get('sierraleone_clean')
+    
+    def load_togo_clean():
+        return ns.get('togo_clean')
+    
+    # Add helper functions to namespace
+    ns['load_benin_data'] = load_benin_data
+    ns['load_sierraleone_data'] = load_sierraleone_data
+    ns['load_togo_data'] = load_togo_data
+    ns['load_benin_clean'] = load_benin_clean
+    ns['load_sierraleone_clean'] = load_sierraleone_clean
+    ns['load_togo_clean'] = load_togo_clean
+    
     return ns
 
-
+@st.cache_data(show_spinner=False)
 def remove_file_loading_code(code: str):
     """Remove all file loading code from the notebook and replace with safe alternatives"""
     lines = code.split('\n')
@@ -933,20 +912,16 @@ def remove_file_loading_code(code: str):
     
     return '\n'.join(cleaned_lines)
 
-def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
+@st.cache_data(show_spinner="Executing notebook code...")
+def exec_code_collect_dfs(_ns, code: str, notebook_name: str) -> Dict[str, Any]:
     """Execute code in a safe environment with pre-loaded data"""
-    
-    # Create safe environment with pre-loaded data
-    ns = create_safe_execution_environment()
     
     # Remove file loading code to prevent errors
     safe_code = remove_file_loading_code(code)
     
     try:
         # Execute the safe code (without file loading operations)
-        with st.spinner('Executing notebook code...'):
-            exec(safe_code, ns)
-        st.success("✅ Notebook executed successfully!")
+        exec(safe_code, _ns)
         
     except Exception as e:
         st.warning("Notebook code execution failed. See error details below.")
@@ -980,13 +955,15 @@ def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
             """)
     
     # collect dataframes
-    dfs = {k: v for k, v in ns.items() if isinstance(v, pd.DataFrame)}
-    return {'namespace': ns, 'dataframes': dfs, 'safe_code': safe_code}
+    dfs = {k: v for k, v in _ns.items() if isinstance(v, pd.DataFrame)}
+    return {'namespace': _ns, 'dataframes': dfs, 'safe_code': safe_code}
 
+@st.cache_data(show_spinner=False)
 def list_csvs():
     """List available CSV files from Google Drive"""
     return list(GDRIVE_DATA_IDS.keys())
 
+@st.cache_data(show_spinner=False)
 def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     st.subheader(f"{name} — Basic summary")
     st.write('Shape:', df.shape)
@@ -1061,15 +1038,9 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
 # ---- MAIN APP ----
 st.sidebar.title("Navigation")
 
-# Find notebooks and CSV files
+# Find notebooks and CSV files - these are now cached
 notebooks = find_notebooks()
 csv_files = list_csvs()
-
-# # Debug information
-# with st.sidebar.expander("Debug Info"):
-#     st.write("Current working directory:", os.getcwd())
-#     st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
-#     st.write("Available CSV files from Google Drive:", csv_files)
 
 # Map simple labels for the user
 label_map = {}
@@ -1103,87 +1074,74 @@ if csv_files:
 else:
     st.sidebar.warning(f"No CSV files available")
 
-# Extract and display markdown
+# Extract and display markdown - cached
 md_text, code_text = extract_markdown_and_code(nb_path)
 if md_text:
     with st.expander('Notebook markdown (click to expand)'):
         st.markdown(md_text)
 
-# Show cleaned code (for debugging)
+# Show cleaned code (for debugging) - cached
 with st.expander('Show cleaned code (for debugging)'):
     safe_code = remove_file_loading_code(code_text)
     st.code(safe_code)
     st.info("Note: All file loading operations have been removed. Data is pre-loaded from Google Drive.")
 
-# Pre-execution check for file loading patterns
-file_loading_detected = any(pattern in code_text for pattern in [
-    "pd.read_csv", ".csv", "open(", "with open(", "read_csv", "to_csv"
-])
-
-# if file_loading_detected:
-#     st.warning("""
-#     ⚠️ **File operations detected**
-    
-#     The notebook contains file operations that will be automatically handled:
-    
-#     - **File loading:** Replaced with pre-loaded data variables
-#     - **File saving:** Disabled - use download buttons in the app instead
-    
-#     **Available pre-loaded data:**
-#     - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
-#     - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
-#     """)
-
 # Try to execute code and collect dataframes
 if st.button('Execute Notebook Code', type='primary'):
-    with st.spinner('Loading data from Google Drive and executing notebook...'):
-        result = exec_code_collect_dfs(code_text, notebook_name)
-
-    dfs = result.get('dataframes', {})
+    # Create safe environment with pre-loaded data (cached)
+    ns = create_safe_execution_environment()
     
-    # Filter out the pre-loaded dataframes to show only newly created ones
-    preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
-                      'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
-                      'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
-                      'togo_clean', 'df_togo_clean']
+    # Execute code and collect results (cached)
+    result = exec_code_collect_dfs(ns, code_text, notebook_name)
     
-    new_dfs = {k: v for k, v in dfs.items() if k not in preloaded_names}
-    
-    if new_dfs:
-        st.success(f'Found {len(new_dfs)} newly created DataFrame(s) in the executed notebook.')
+    if result:
+        st.success("✅ Notebook executed successfully!")
         
-        # Display all new dataframes in tabs
-        tab_names = list(new_dfs.keys())
-        tabs = st.tabs([f"📊 {name}" for name in tab_names])
+        dfs = result.get('dataframes', {})
         
-        for i, (df_name, df) in enumerate(new_dfs.items()):
-            with tabs[i]:
-                show_dataframe_eda(df, name=df_name)
-                
-                # Add download button for each dataframe
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label=f"Download {df_name} as CSV",
-                    data=csv,
-                    file_name=f"{df_name}.csv",
-                    mime="text/csv",
-                    key=f"download_{df_name}_{i}"
-                )
-    else:
-        st.info('No new DataFrame objects were created by executing the notebook.')
-        st.info('Showing pre-loaded dataframes instead:')
+        # Filter out the pre-loaded dataframes to show only newly created ones
+        preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
+                          'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
+                          'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
+                          'togo_clean', 'df_togo_clean']
         
-        # Show pre-loaded dataframes
-        preloaded_dfs = {k: v for k, v in result['namespace'].items() 
-                        if k in preloaded_names and isinstance(v, pd.DataFrame)}
+        new_dfs = {k: v for k, v in dfs.items() if k not in preloaded_names}
         
-        if preloaded_dfs:
-            tab_names = list(preloaded_dfs.keys())
+        if new_dfs:
+            st.success(f'Found {len(new_dfs)} newly created DataFrame(s) in the executed notebook.')
+            
+            # Display all new dataframes in tabs
+            tab_names = list(new_dfs.keys())
             tabs = st.tabs([f"📊 {name}" for name in tab_names])
             
-            for i, (df_name, df) in enumerate(preloaded_dfs.items()):
+            for i, (df_name, df) in enumerate(new_dfs.items()):
                 with tabs[i]:
                     show_dataframe_eda(df, name=df_name)
+                    
+                    # Add download button for each dataframe
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label=f"Download {df_name} as CSV",
+                        data=csv,
+                        file_name=f"{df_name}.csv",
+                        mime="text/csv",
+                        key=f"download_{df_name}_{i}"
+                    )
+        else:
+            st.info('No new DataFrame objects were created by executing the notebook.')
+            st.info('Showing pre-loaded dataframes instead:')
+            
+            # Show pre-loaded dataframes
+            preloaded_dfs = {k: v for k, v in result['namespace'].items() 
+                            if k in preloaded_names and isinstance(v, pd.DataFrame)}
+            
+            if preloaded_dfs:
+                tab_names = list(preloaded_dfs.keys())
+                tabs = st.tabs([f"📊 {name}" for name in tab_names])
+                
+                for i, (df_name, df) in enumerate(preloaded_dfs.items()):
+                    with tabs[i]:
+                        show_dataframe_eda(df, name=df_name)
 
 # Quick CSV loader in sidebar
 st.sidebar.subheader("Quick CSV Loader")
@@ -1216,4 +1174,5 @@ st.info(f'''
 # Add a clear cache button for troubleshooting
 if st.sidebar.button("Clear Cache (for troubleshooting)"):
     st.cache_data.clear()
+    st.cache_resource.clear()
     st.sidebar.success("Cache cleared! Refresh the page.")
