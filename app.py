@@ -1031,11 +1031,11 @@ st.sidebar.title("Navigation")
 notebooks = find_notebooks()
 csv_files = list_csvs()
 
-# Debug information
-with st.sidebar.expander("Debug Info"):
-    st.write("Current working directory:", os.getcwd())
-    st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
-    st.write("Available CSV files from Google Drive:", csv_files)
+# # Debug information
+# with st.sidebar.expander("Debug Info"):
+#     st.write("Current working directory:", os.getcwd())
+#     st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
+#     st.write("Available CSV files from Google Drive:", csv_files)
 
 # Map simple labels for the user
 label_map = {}
@@ -1086,19 +1086,19 @@ file_loading_detected = any(pattern in code_text for pattern in [
     "pd.read_csv", ".csv", "open(", "with open(", "read_csv", "to_csv"
 ])
 
-if file_loading_detected:
-    st.warning("""
-    ⚠️ **File operations detected**
+# if file_loading_detected:
+#     st.warning("""
+#     ⚠️ **File operations detected**
     
-    The notebook contains file operations that will be automatically handled:
+#     The notebook contains file operations that will be automatically handled:
     
-    - **File loading:** Replaced with pre-loaded data variables
-    - **File saving:** Disabled - use download buttons in the app instead
+#     - **File loading:** Replaced with pre-loaded data variables
+#     - **File saving:** Disabled - use download buttons in the app instead
     
-    **Available pre-loaded data:**
-    - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
-    - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
-    """)
+#     **Available pre-loaded data:**
+#     - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
+#     - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
+#     """)
 
 # Try to execute code and collect dataframes
 if st.button('Execute Notebook Code', type='primary'):
