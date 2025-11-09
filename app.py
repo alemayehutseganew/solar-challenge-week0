@@ -489,6 +489,7 @@ import sys
 import requests
 from io import BytesIO
 import re
+import numpy as np
 
 st.set_page_config(page_title="Solar Challenge EDA Dashboard", layout="wide")
 
@@ -540,12 +541,27 @@ def download_from_gdrive(file_id):
 
 @st.cache_data
 def load_csv_from_gdrive(filename):
-    """Load CSV file from Google Drive with caching"""
+    """Load CSV file from Google Drive with caching and proper datetime handling"""
     if filename in GDRIVE_DATA_IDS:
         file_content = download_from_gdrive(GDRIVE_DATA_IDS[filename])
         if file_content is not None:
             try:
-                return pd.read_csv(file_content)
+                # Load with explicit dtype specification to avoid PyArrow issues
+                df = pd.read_csv(
+                    file_content,
+                    low_memory=False,
+                    dtype_backend='numpy_nullable'  # Avoid PyArrow backend
+                )
+                
+                # Fix datetime columns if they exist
+                for col in df.columns:
+                    if 'date' in col.lower() or 'time' in col.lower():
+                        try:
+                            df[col] = pd.to_datetime(df[col], errors='ignore')
+                        except:
+                            pass  # Keep as original if conversion fails
+                
+                return df
             except Exception as e:
                 st.error(f"Error loading {filename}: {str(e)}")
                 return None
@@ -612,7 +628,7 @@ def create_safe_execution_environment():
     ns['st'] = st
     ns['requests'] = requests
     ns['BytesIO'] = BytesIO
-    ns['np'] = __import__('numpy')
+    ns['np'] = np
     
     # Pre-load ALL data files into the namespace
     st.info("📥 Loading all data files from Google Drive...")
@@ -778,34 +794,55 @@ def list_csvs():
     """List available CSV files from Google Drive"""
     return list(GDRIVE_DATA_IDS.keys())
 
+def fix_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """Fix dataframe to avoid PyArrow datetime conversion issues"""
+    df_fixed = df.copy()
+    
+    # Convert datetime columns to string for display to avoid PyArrow issues
+    for col in df_fixed.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_fixed[col]):
+            df_fixed[col] = df_fixed[col].astype(str)
+        # Handle other problematic dtypes
+        elif hasattr(df_fixed[col].dtype, 'pyarrow_dtype'):
+            df_fixed[col] = df_fixed[col].astype('object')
+    
+    return df_fixed
+
 def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     st.subheader(f"{name} — Basic summary")
     st.write('Shape:', df.shape)
     
+    # Fix dataframe for display to avoid PyArrow issues
+    df_display = fix_dataframe_for_display(df)
+    
     with st.expander('Show first 10 rows'):
-        st.dataframe(df.head(10))
+        st.dataframe(df_display.head(10), use_container_width=True)
     
     with st.expander('Describe (numerical)'):
-        st.dataframe(df.describe().T)
+        # Use numpy backend for describe to avoid PyArrow
+        desc_df = df.describe().T
+        desc_df_fixed = fix_dataframe_for_display(desc_df)
+        st.dataframe(desc_df_fixed, use_container_width=True)
     
     # Show nulls
     nulls = df.isnull().sum()
     if nulls.sum() > 0:
         with st.expander('Null counts'):
-            st.dataframe(nulls[nulls > 0])
+            nulls_df = pd.DataFrame({'Null Count': nulls[nulls > 0]})
+            st.dataframe(nulls_df, use_container_width=True)
     
     # Show column info
     with st.expander('Column information'):
         col_info = pd.DataFrame({
             'Column': df.columns,
-            'Data Type': df.dtypes,
+            'Data Type': df.dtypes.astype(str),  # Convert to string to avoid dtype issues
             'Non-Null Count': df.count(),
             'Null Count': df.isnull().sum()
         })
-        st.dataframe(col_info)
+        st.dataframe(col_info, use_container_width=True)
     
     # Simple plots
-    numeric = df.select_dtypes(include='number')
+    numeric = df.select_dtypes(include=[np.number])
     if numeric.shape[1] > 0:
         st.subheader('Numeric column analysis')
         
@@ -981,4 +1018,5 @@ st.info(f'''
 - Data is pre-loaded before notebook execution
 - File loading operations in notebooks are automatically replaced with pre-loaded data references
 - Uses cached downloads for better performance
+- Fixed PyArrow datetime conversion issues
 ''')
