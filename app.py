@@ -541,7 +541,7 @@ def download_from_gdrive(file_id):
 
 @st.cache_data
 def load_csv_from_gdrive(filename):
-    """Load CSV file from Google Drive with caching and proper datetime handling"""
+    """Load CSV file from Google Drive with caching and proper dtype handling"""
     if filename in GDRIVE_DATA_IDS:
         file_content = download_from_gdrive(GDRIVE_DATA_IDS[filename])
         if file_content is not None:
@@ -549,17 +549,25 @@ def load_csv_from_gdrive(filename):
                 # Load with explicit dtype specification to avoid PyArrow issues
                 df = pd.read_csv(
                     file_content,
-                    low_memory=False,
-                    dtype_backend='numpy_nullable'  # Avoid PyArrow backend
+                    low_memory=False
                 )
                 
-                # Fix datetime columns if they exist
+                # Fix problematic dtypes
                 for col in df.columns:
+                    # Convert object columns that should be numeric
+                    if df[col].dtype == 'object':
+                        try:
+                            # Try to convert to numeric first
+                            df[col] = pd.to_numeric(df[col], errors='ignore')
+                        except:
+                            pass
+                    
+                    # Fix datetime columns
                     if 'date' in col.lower() or 'time' in col.lower():
                         try:
                             df[col] = pd.to_datetime(df[col], errors='ignore')
                         except:
-                            pass  # Keep as original if conversion fails
+                            pass
                 
                 return df
             except Exception as e:
@@ -802,11 +810,35 @@ def fix_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:
     for col in df_fixed.columns:
         if pd.api.types.is_datetime64_any_dtype(df_fixed[col]):
             df_fixed[col] = df_fixed[col].astype(str)
-        # Handle other problematic dtypes
-        elif hasattr(df_fixed[col].dtype, 'pyarrow_dtype'):
-            df_fixed[col] = df_fixed[col].astype('object')
+        # Handle problematic object dtypes
+        elif df_fixed[col].dtype == 'object':
+            # Try to identify if it's actually numeric data stored as object
+            try:
+                # Sample a few values to check if they're numeric
+                sample_values = df_fixed[col].dropna().head(10)
+                if all(pd.to_numeric(sample_values, errors='coerce').notna()):
+                    df_fixed[col] = pd.to_numeric(df_fixed[col], errors='coerce')
+            except:
+                pass
     
     return df_fixed
+
+def get_numeric_columns(df: pd.DataFrame):
+    """Safely get numeric columns from dataframe"""
+    numeric_cols = []
+    for col in df.columns:
+        try:
+            # Check if column can be converted to numeric
+            if pd.api.types.is_numeric_dtype(df[col]):
+                numeric_cols.append(col)
+            else:
+                # Try to convert and check
+                temp_series = pd.to_numeric(df[col], errors='coerce')
+                if temp_series.notna().any():  # If any values successfully converted
+                    numeric_cols.append(col)
+        except:
+            continue
+    return numeric_cols
 
 def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     st.subheader(f"{name} — Basic summary")
@@ -819,10 +851,15 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
         st.dataframe(df_display.head(10), use_container_width=True)
     
     with st.expander('Describe (numerical)'):
-        # Use numpy backend for describe to avoid PyArrow
-        desc_df = df.describe().T
-        desc_df_fixed = fix_dataframe_for_display(desc_df)
-        st.dataframe(desc_df_fixed, use_container_width=True)
+        # Safely get numeric columns for describe
+        numeric_cols = get_numeric_columns(df)
+        if numeric_cols:
+            numeric_df = df[numeric_cols]
+            desc_df = numeric_df.describe().T
+            desc_df_fixed = fix_dataframe_for_display(desc_df)
+            st.dataframe(desc_df_fixed, use_container_width=True)
+        else:
+            st.info('No numeric columns available for description')
     
     # Show nulls
     nulls = df.isnull().sum()
@@ -841,9 +878,9 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
         })
         st.dataframe(col_info, use_container_width=True)
     
-    # Simple plots
-    numeric = df.select_dtypes(include=[np.number])
-    if numeric.shape[1] > 0:
+    # Simple plots - only if we have numeric columns
+    numeric_cols = get_numeric_columns(df)
+    if numeric_cols:
         st.subheader('Numeric column analysis')
         
         col1, col2 = st.columns(2)
@@ -851,38 +888,55 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
         with col1:
             # Histogram
             hist_col = st.selectbox('Select column for histogram', 
-                                  options=list(numeric.columns), 
+                                  options=numeric_cols, 
                                   key=f'hist_{name}')
-            bins = st.slider('Number of bins', 5, 100, 30, key=f'bins_{name}')
             
-            fig, ax = plt.subplots()
-            ax.hist(numeric[hist_col].dropna(), bins=bins, alpha=0.7, edgecolor='black')
-            ax.set_xlabel(hist_col)
-            ax.set_ylabel('Count')
-            ax.set_title(f'Histogram of {hist_col}')
-            st.pyplot(fig)
+            if hist_col in df.columns:
+                # Safely get numeric data for histogram
+                hist_data = pd.to_numeric(df[hist_col], errors='coerce').dropna()
+                if len(hist_data) > 0:
+                    bins = st.slider('Number of bins', 5, 100, 30, key=f'bins_{name}')
+                    
+                    fig, ax = plt.subplots()
+                    ax.hist(hist_data, bins=bins, alpha=0.7, edgecolor='black')
+                    ax.set_xlabel(hist_col)
+                    ax.set_ylabel('Count')
+                    ax.set_title(f'Histogram of {hist_col}')
+                    st.pyplot(fig)
+                else:
+                    st.warning(f"No numeric data available for {hist_col}")
+            else:
+                st.warning(f"Column {hist_col} not found in dataframe")
         
         with col2:
-            # Correlation heatmap
-            if numeric.shape[1] > 1:
+            # Correlation heatmap - only if we have multiple numeric columns
+            if len(numeric_cols) > 1:
                 st.write('Correlation heatmap')
-                corr = numeric.corr()
-                fig2, ax2 = plt.subplots(figsize=(8, 6))
-                im = ax2.imshow(corr, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
-                
-                # Add correlation values as text
-                for i in range(len(corr.columns)):
-                    for j in range(len(corr.columns)):
-                        ax2.text(j, i, f'{corr.iloc[i, j]:.2f}',
-                               ha="center", va="center", color="black", fontsize=8)
-                
-                ax2.set_xticks(range(len(corr.columns)))
-                ax2.set_yticks(range(len(corr.columns)))
-                ax2.set_xticklabels(corr.columns, rotation=45, ha='right')
-                ax2.set_yticklabels(corr.columns)
-                ax2.set_title('Correlation Matrix')
-                fig2.colorbar(im)
-                st.pyplot(fig2)
+                try:
+                    # Safely create correlation matrix
+                    numeric_data = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+                    corr = numeric_data.corr()
+                    
+                    fig2, ax2 = plt.subplots(figsize=(8, 6))
+                    im = ax2.imshow(corr, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
+                    
+                    # Add correlation values as text
+                    for i in range(len(corr.columns)):
+                        for j in range(len(corr.columns)):
+                            ax2.text(j, i, f'{corr.iloc[i, j]:.2f}',
+                                   ha="center", va="center", color="black", fontsize=8)
+                    
+                    ax2.set_xticks(range(len(corr.columns)))
+                    ax2.set_yticks(range(len(corr.columns)))
+                    ax2.set_xticklabels(corr.columns, rotation=45, ha='right')
+                    ax2.set_yticklabels(corr.columns)
+                    ax2.set_title('Correlation Matrix')
+                    fig2.colorbar(im)
+                    st.pyplot(fig2)
+                except Exception as e:
+                    st.error(f"Could not create correlation heatmap: {e}")
+            else:
+                st.info('Need at least 2 numeric columns for correlation heatmap')
     else:
         st.info('No numeric columns detected for plotting.')
 
@@ -1018,5 +1072,5 @@ st.info(f'''
 - Data is pre-loaded before notebook execution
 - File loading operations in notebooks are automatically replaced with pre-loaded data references
 - Uses cached downloads for better performance
-- Fixed PyArrow datetime conversion issues
+- Enhanced data type handling to avoid NumPy object dtype issues
 ''')
