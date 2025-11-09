@@ -214,28 +214,65 @@ def create_safe_execution_environment():
     
     return ns
 
+# def remove_file_loading_code(code: str):
+#     """Remove all file loading code from the notebook and replace with comments"""
+#     # Patterns to remove (file loading operations)
+#     patterns_to_remove = [
+#         r"pd\.read_csv\([^)]+\)",
+#         r"pd\.read_excel\([^)]+\)",
+#         r"pd\.read_json\([^)]+\)",
+#         r"open\([^)]+\)",
+#         r"with open\([^)]+\)",
+#     ]
+    
+#     cleaned_code = code
+#     for pattern in patterns_to_remove:
+#         # Replace file loading operations with comments
+#         cleaned_code = re.sub(
+#             pattern, 
+#             "# FILE LOADING REMOVED: Data is pre-loaded from Google Drive", 
+#             cleaned_code, 
+#             flags=re.IGNORECASE
+#         )
+    
+#     return cleaned_code
 def remove_file_loading_code(code: str):
     """Remove all file loading code from the notebook and replace with comments"""
-    # Patterns to remove (file loading operations)
-    patterns_to_remove = [
-        r"pd\.read_csv\([^)]+\)",
-        r"pd\.read_excel\([^)]+\)",
-        r"pd\.read_json\([^)]+\)",
-        r"open\([^)]+\)",
-        r"with open\([^)]+\)",
-    ]
+    lines = code.split('\n')
+    cleaned_lines = []
     
-    cleaned_code = code
-    for pattern in patterns_to_remove:
-        # Replace file loading operations with comments
-        cleaned_code = re.sub(
-            pattern, 
-            "# FILE LOADING REMOVED: Data is pre-loaded from Google Drive", 
-            cleaned_code, 
-            flags=re.IGNORECASE
-        )
+    for line in lines:
+        # Skip empty lines
+        if not line.strip():
+            cleaned_lines.append(line)
+            continue
+            
+        # Check if this line contains file loading operations
+        file_loading_patterns = [
+            r"pd\.read_csv",
+            r"pd\.read_excel", 
+            r"pd\.read_json",
+            r"open\(",
+            r"with open\(",
+            r"load_csv_from_gdrive",
+            r"download_from_gdrive"
+        ]
+        
+        is_file_loading = any(pattern in line for pattern in file_loading_patterns)
+        
+        if is_file_loading:
+            # Check if this is an assignment (starts with variable =)
+            if re.match(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=', line.strip()):
+                # For assignment lines, comment out the entire line and add a note
+                cleaned_lines.append(f"# {line}  # FILE LOADING REMOVED: Data is pre-loaded from Google Drive")
+            else:
+                # For other file operations, just comment them out
+                cleaned_lines.append(f"# {line}  # FILE LOADING REMOVED")
+        else:
+            # Keep the original line
+            cleaned_lines.append(line)
     
-    return cleaned_code
+    return '\n'.join(cleaned_lines)
 
 def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
     """Execute code in a safe environment with pre-loaded data"""
