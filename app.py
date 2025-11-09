@@ -475,7 +475,6 @@
 # - Uses cached downloads for better performance
 # ''')
 
-
 import streamlit as st
 import nbformat
 import os
@@ -848,7 +847,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     df_display = fix_dataframe_for_display(df)
     
     with st.expander('Show first 10 rows'):
-        st.dataframe(df_display.head(10), use_container_width=True)
+        st.dataframe(df_display.head(10), width='stretch')
     
     with st.expander('Describe (numerical)'):
         # Safely get numeric columns for describe
@@ -857,7 +856,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
             numeric_df = df[numeric_cols]
             desc_df = numeric_df.describe().T
             desc_df_fixed = fix_dataframe_for_display(desc_df)
-            st.dataframe(desc_df_fixed, use_container_width=True)
+            st.dataframe(desc_df_fixed, width='stretch')
         else:
             st.info('No numeric columns available for description')
     
@@ -866,7 +865,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     if nulls.sum() > 0:
         with st.expander('Null counts'):
             nulls_df = pd.DataFrame({'Null Count': nulls[nulls > 0]})
-            st.dataframe(nulls_df, use_container_width=True)
+            st.dataframe(nulls_df, width='stretch')
     
     # Show column info
     with st.expander('Column information'):
@@ -876,7 +875,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
             'Non-Null Count': df.count(),
             'Null Count': df.isnull().sum()
         })
-        st.dataframe(col_info, use_container_width=True)
+        st.dataframe(col_info, width='stretch')
     
     # Simple plots - only if we have numeric columns
     numeric_cols = get_numeric_columns(df)
@@ -1030,7 +1029,8 @@ if st.button('Execute Notebook Code'):
                     data=csv,
                     file_name=f"{df_name}.csv",
                     mime="text/csv",
-                    key=f"download_{df_name}_{i}"
+                    key=f"download_{df_name}_{i}",
+                    width='stretch'
                 )
     else:
         st.info('No new DataFrame objects were created by executing the notebook.')
@@ -1054,7 +1054,7 @@ if csv_files:
     selected_csv = st.sidebar.selectbox("Load CSV for quick EDA", 
                                        options=[""] + csv_files)
     if selected_csv:
-        if st.sidebar.button("Analyze this CSV"):
+        if st.sidebar.button("Analyze this CSV", width='stretch'):
             try:
                 df_quick = load_csv_from_gdrive(selected_csv)
                 if df_quick is not None:
