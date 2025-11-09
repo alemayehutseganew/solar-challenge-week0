@@ -912,16 +912,21 @@ def remove_file_loading_code(code: str):
     
     return '\n'.join(cleaned_lines)
 
-@st.cache_data(show_spinner="Executing notebook code...")
-def exec_code_collect_dfs(_ns, code: str, notebook_name: str) -> Dict[str, Any]:
+def exec_code_collect_dfs(_ns, code: str, notebook_name: str):
     """Execute code in a safe environment with pre-loaded data"""
     
     # Remove file loading code to prevent errors
     safe_code = remove_file_loading_code(code)
     
+    execution_success = False
+    new_dataframes = {}
+    
     try:
         # Execute the safe code (without file loading operations)
-        exec(safe_code, _ns)
+        with st.spinner('Executing notebook code...'):
+            exec(safe_code, _ns)
+        execution_success = True
+        st.success("✅ Notebook executed successfully!")
         
     except Exception as e:
         st.warning("Notebook code execution failed. See error details below.")
@@ -954,16 +959,29 @@ def exec_code_collect_dfs(_ns, code: str, notebook_name: str) -> Dict[str, Any]:
             **For loading data:** Use the pre-loaded variables above
             """)
     
-    # collect dataframes
-    dfs = {k: v for k, v in _ns.items() if isinstance(v, pd.DataFrame)}
-    return {'namespace': _ns, 'dataframes': dfs, 'safe_code': safe_code}
+    # Collect newly created dataframes (only the names, not the actual DataFrames)
+    if execution_success:
+        preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
+                          'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
+                          'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
+                          'togo_clean', 'df_togo_clean']
+        
+        for key, value in _ns.items():
+            if isinstance(value, pd.DataFrame) and key not in preloaded_names:
+                new_dataframes[key] = value
+    
+    return {
+        'execution_success': execution_success,
+        'new_dataframe_names': list(new_dataframes.keys()),
+        'safe_code': safe_code,
+        'namespace_keys': list(_ns.keys())
+    }
 
 @st.cache_data(show_spinner=False)
 def list_csvs():
     """List available CSV files from Google Drive"""
     return list(GDRIVE_DATA_IDS.keys())
 
-@st.cache_data(show_spinner=False)
 def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
     st.subheader(f"{name} — Basic summary")
     st.write('Shape:', df.shape)
@@ -1010,6 +1028,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
             ax.set_ylabel('Count')
             ax.set_title(f'Histogram of {hist_col}')
             st.pyplot(fig)
+            plt.close(fig)  # Close figure to free memory
         
         with col2:
             # Correlation heatmap
@@ -1032,6 +1051,7 @@ def show_dataframe_eda(df: pd.DataFrame, name: str = 'DataFrame'):
                 ax2.set_title('Correlation Matrix')
                 fig2.colorbar(im)
                 st.pyplot(fig2)
+                plt.close(fig2)  # Close figure to free memory
     else:
         st.info('No numeric columns detected for plotting.')
 
@@ -1091,48 +1111,45 @@ if st.button('Execute Notebook Code', type='primary'):
     # Create safe environment with pre-loaded data (cached)
     ns = create_safe_execution_environment()
     
-    # Execute code and collect results (cached)
+    # Execute code and collect results (NOT cached - returns only serializable data)
     result = exec_code_collect_dfs(ns, code_text, notebook_name)
     
-    if result:
-        st.success("✅ Notebook executed successfully!")
+    if result and result['execution_success']:
+        # Get newly created dataframes from the namespace
+        new_df_names = result['new_dataframe_names']
         
-        dfs = result.get('dataframes', {})
-        
-        # Filter out the pre-loaded dataframes to show only newly created ones
-        preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
-                          'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
-                          'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
-                          'togo_clean', 'df_togo_clean']
-        
-        new_dfs = {k: v for k, v in dfs.items() if k not in preloaded_names}
-        
-        if new_dfs:
-            st.success(f'Found {len(new_dfs)} newly created DataFrame(s) in the executed notebook.')
+        if new_df_names:
+            st.success(f'Found {len(new_df_names)} newly created DataFrame(s) in the executed notebook.')
             
             # Display all new dataframes in tabs
-            tab_names = list(new_dfs.keys())
-            tabs = st.tabs([f"📊 {name}" for name in tab_names])
+            tabs = st.tabs([f"📊 {name}" for name in new_df_names])
             
-            for i, (df_name, df) in enumerate(new_dfs.items()):
-                with tabs[i]:
-                    show_dataframe_eda(df, name=df_name)
-                    
-                    # Add download button for each dataframe
-                    csv = df.to_csv(index=False)
-                    st.download_button(
-                        label=f"Download {df_name} as CSV",
-                        data=csv,
-                        file_name=f"{df_name}.csv",
-                        mime="text/csv",
-                        key=f"download_{df_name}_{i}"
-                    )
+            for i, df_name in enumerate(new_df_names):
+                df = ns.get(df_name)
+                if df is not None and isinstance(df, pd.DataFrame):
+                    with tabs[i]:
+                        show_dataframe_eda(df, name=df_name)
+                        
+                        # Add download button for each dataframe
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label=f"Download {df_name} as CSV",
+                            data=csv,
+                            file_name=f"{df_name}.csv",
+                            mime="text/csv",
+                            key=f"download_{df_name}_{i}"
+                        )
         else:
             st.info('No new DataFrame objects were created by executing the notebook.')
             st.info('Showing pre-loaded dataframes instead:')
             
             # Show pre-loaded dataframes
-            preloaded_dfs = {k: v for k, v in result['namespace'].items() 
+            preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
+                              'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
+                              'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
+                              'togo_clean', 'df_togo_clean']
+            
+            preloaded_dfs = {k: v for k, v in ns.items() 
                             if k in preloaded_names and isinstance(v, pd.DataFrame)}
             
             if preloaded_dfs:
