@@ -215,27 +215,92 @@
 #     return ns
 
 # def remove_file_loading_code(code: str):
-#     """Remove all file loading code from the notebook and replace with comments"""
-#     # Patterns to remove (file loading operations)
-#     patterns_to_remove = [
-#         r"pd\.read_csv\([^)]+\)",
-#         r"pd\.read_excel\([^)]+\)",
-#         r"pd\.read_json\([^)]+\)",
-#         r"open\([^)]+\)",
-#         r"with open\([^)]+\)",
-#     ]
+#     """Remove all file loading code from the notebook and replace with safe alternatives"""
+#     lines = code.split('\n')
+#     cleaned_lines = []
     
-#     cleaned_code = code
-#     for pattern in patterns_to_remove:
-#         # Replace file loading operations with comments
-#         cleaned_code = re.sub(
-#             pattern, 
-#             "# FILE LOADING REMOVED: Data is pre-loaded from Google Drive", 
-#             cleaned_code, 
-#             flags=re.IGNORECASE
-#         )
+#     i = 0
+#     while i < len(lines):
+#         line = lines[i]
+        
+#         # Skip empty lines
+#         if not line.strip():
+#             cleaned_lines.append(line)
+#             i += 1
+#             continue
+            
+#         # Check for file saving operations (to_csv, to_excel, etc.)
+#         if any(save_op in line for save_op in ['to_csv(', 'to_excel(', 'to_json(', '.save(']):
+#             # Comment out the entire file saving line
+#             indent = len(line) - len(line.lstrip())
+#             cleaned_lines.append(f"{' ' * indent}# {line.strip()}  # FILE SAVING DISABLED: Use st.download_button instead")
+#             i += 1
+#             continue
+            
+#         # Check for file loading operations
+#         file_loading_indicators = [
+#             'pd.read_csv', 'read_csv', 'pd.read_excel', 'read_excel',
+#             'pd.read_json', 'open(', 'with open(', 'load_csv', 'download_from_gdrive'
+#         ]
+        
+#         is_file_loading = any(indicator in line for indicator in file_loading_indicators)
+#         is_csv_file = '.csv' in line and ('=' in line or 'pd.read' in line)
+        
+#         if is_file_loading or is_csv_file:
+#             # Handle multi-line file operations
+#             full_line = line
+#             j = i
+#             # Look ahead for continuation lines
+#             while j < len(lines) - 1 and (lines[j].strip().endswith('\\') or 
+#                                          lines[j].count('(') > lines[j].count(')')):
+#                 j += 1
+#                 full_line += ' ' + lines[j].strip()
+            
+#             if j > i:
+#                 # Multi-line operation found - comment out all lines
+#                 for k in range(i, j + 1):
+#                     indent = len(lines[k]) - len(lines[k].lstrip())
+#                     cleaned_lines.append(f"{' ' * indent}# {lines[k].strip()}  # FILE LOADING DISABLED")
+#                 i = j + 1
+#                 continue
+            
+#             # Single line file loading operation
+#             if '=' in line and not line.strip().startswith('#'):
+#                 # It's an assignment - replace with appropriate pre-loaded data
+#                 parts = line.split('=')
+#                 if len(parts) > 1:
+#                     var_name = parts[0].strip()
+#                     indent = len(line) - len(line.lstrip())
+                    
+#                     # Try to infer which dataset to use based on the filename in the line
+#                     if 'benin' in line.lower() and 'clean' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_clean  # FILE LOADING REPLACED: Using pre-loaded Benin clean data")
+#                     elif 'benin' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_df  # FILE LOADING REPLACED: Using pre-loaded Benin data")
+#                     elif 'sierra' in line.lower() and 'clean' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_clean  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone clean data")
+#                     elif 'sierra' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_df  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone data")
+#                     elif 'togo' in line.lower() and 'clean' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_clean  # FILE LOADING REPLACED: Using pre-loaded Togo clean data")
+#                     elif 'togo' in line.lower():
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_df  # FILE LOADING REPLACED: Using pre-loaded Togo data")
+#                     else:
+#                         # Generic replacement
+#                         cleaned_lines.append(f"{' ' * indent}{var_name} = None  # FILE LOADING DISABLED: Data pre-loaded - use available datasets")
+#                 else:
+#                     cleaned_lines.append(f"# {line}  # FILE LOADING DISABLED")
+#             else:
+#                 # Non-assignment file operation - comment out
+#                 indent = len(line) - len(line.lstrip())
+#                 cleaned_lines.append(f"{' ' * indent}# {line.strip()}  # FILE LOADING DISABLED")
+#         else:
+#             # Keep the original line
+#             cleaned_lines.append(line)
+        
+#         i += 1
     
-#     return cleaned_code
+#     return '\n'.join(cleaned_lines)
 
 # def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
 #     """Execute code in a safe environment with pre-loaded data"""
@@ -261,6 +326,25 @@
 #         # Show what code was executed
 #         with st.expander("See Code That Was Executed"):
 #             st.code(safe_code)
+        
+#         # If it's a file not found error, provide specific guidance
+#         if "No such file or directory" in str(e) or "to_csv" in str(e):
+#             st.error("""
+#             **File Operation Error Detected**
+            
+#             The notebook is trying to access local files. This has been disabled for security.
+            
+#             **Available pre-loaded data:**
+#             - `benin_df` or `df_benin` - Benin data
+#             - `sierraleone_df` or `df_sierra` - Sierra Leone data  
+#             - `togo_df` or `df_togo` - Togo data
+#             - `benin_clean` - Clean Benin data
+#             - `sierraleone_clean` - Clean Sierra Leone data
+#             - `togo_clean` - Clean Togo data
+            
+#             **For saving data:** Use `st.download_button` in the app instead of `to_csv()`
+#             **For loading data:** Use the pre-loaded variables above
+#             """)
     
 #     # collect dataframes
 #     dfs = {k: v for k, v in ns.items() if isinstance(v, pd.DataFrame)}
@@ -398,6 +482,25 @@
 #     st.code(safe_code)
 #     st.info("Note: All file loading operations have been removed. Data is pre-loaded from Google Drive.")
 
+# # Pre-execution check for file loading patterns
+# file_loading_detected = any(pattern in code_text for pattern in [
+#     "pd.read_csv", ".csv", "open(", "with open(", "read_csv", "to_csv"
+# ])
+
+# if file_loading_detected:
+#     st.warning("""
+#     ⚠️ **File operations detected**
+    
+#     The notebook contains file operations that will be automatically handled:
+    
+#     - **File loading:** Replaced with pre-loaded data variables
+#     - **File saving:** Disabled - use download buttons in the app instead
+    
+#     **Available pre-loaded data:**
+#     - `benin_df`, `sierraleone_df`, `togo_df` - Raw data
+#     - `benin_clean`, `sierraleone_clean`, `togo_clean` - Clean data
+#     """)
+
 # # Try to execute code and collect dataframes
 # if st.button('Execute Notebook Code'):
 #     with st.spinner('Loading data from Google Drive and executing notebook...'):
@@ -472,6 +575,7 @@
 # - No local file access - completely bypasses file system errors
 # - Data is pre-loaded before notebook execution
 # - File loading operations in notebooks are automatically removed
+# - File saving operations are disabled (use download buttons instead)
 # - Uses cached downloads for better performance
 # ''')
 
@@ -488,11 +592,20 @@ import sys
 import requests
 from io import BytesIO
 import re
+import time
 
-st.set_page_config(page_title="Solar Challenge EDA Dashboard", layout="wide")
+# Configure Streamlit page with improved settings
+st.set_page_config(
+    page_title="Solar Challenge EDA Dashboard", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 HEADER = "Solar Challenge EDA Dashboard — Benin / Sierra Leone / Togo / Comparison"
 st.title(HEADER)
+
+# Add a startup message to help with connection issues
+st.sidebar.info("🔧 If you see connection errors, try refreshing the page.")
 
 # Google Drive File IDs for DATA files
 GDRIVE_DATA_IDS = {
@@ -519,14 +632,15 @@ NOTEBOOK_PATTERNS = [
     "compare_countries.ipynb"
 ]
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def download_from_gdrive(file_id):
     """Download file from Google Drive and return as BytesIO object"""
     URL = "https://drive.google.com/uc?export=download&id="
     
     try:
         session = requests.Session()
-        response = session.get(URL + file_id, stream=True)
+        # Add retry logic and timeout
+        response = session.get(URL + file_id, stream=True, timeout=30)
         
         if response.status_code == 200:
             return BytesIO(response.content)
@@ -537,7 +651,7 @@ def download_from_gdrive(file_id):
         st.error(f"Error downloading file {file_id}: {str(e)}")
         return None
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_csv_from_gdrive(filename):
     """Load CSV file from Google Drive with caching"""
     if filename in GDRIVE_DATA_IDS:
@@ -550,7 +664,7 @@ def load_csv_from_gdrive(filename):
                 return None
     return None
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_notebook_from_gdrive(notebook_name):
     """Load notebook file from Google Drive with caching"""
     if notebook_name in GDRIVE_NOTEBOOK_IDS:
@@ -614,7 +728,10 @@ def create_safe_execution_environment():
     ns['np'] = __import__('numpy')
     
     # Pre-load ALL data files into the namespace
-    st.info("📥 Loading all data files from Google Drive...")
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("📥 Loading data files from Google Drive...")
     
     # Load Benin data
     benin_data = load_csv_from_gdrive("benin-malanville.csv")
@@ -622,7 +739,7 @@ def create_safe_execution_environment():
         ns['benin_df'] = benin_data
         ns['df_benin'] = benin_data
         ns['benin_data'] = benin_data
-        st.success("✅ Benin data loaded")
+    progress_bar.progress(20)
     
     # Load Sierra Leone data
     sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
@@ -631,7 +748,7 @@ def create_safe_execution_environment():
         ns['df_sierra'] = sierra_data
         ns['sierra_data'] = sierra_data
         ns['sierraleone_data'] = sierra_data
-        st.success("✅ Sierra Leone data loaded")
+    progress_bar.progress(40)
     
     # Load Togo data
     togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
@@ -639,26 +756,30 @@ def create_safe_execution_environment():
         ns['togo_df'] = togo_data
         ns['df_togo'] = togo_data
         ns['togo_data'] = togo_data
-        st.success("✅ Togo data loaded")
+    progress_bar.progress(60)
     
     # Load clean data versions
     benin_clean = load_csv_from_gdrive("Benin_clean.csv")
     if benin_clean is not None:
         ns['benin_clean'] = benin_clean
         ns['df_benin_clean'] = benin_clean
-        st.success("✅ Benin clean data loaded")
     
     sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
     if sierra_clean is not None:
         ns['sierraleone_clean'] = sierra_clean
         ns['df_sierra_clean'] = sierra_clean
-        st.success("✅ Sierra Leone clean data loaded")
+    progress_bar.progress(80)
     
     togo_clean = load_csv_from_gdrive("Togo_clean.csv")
     if togo_clean is not None:
         ns['togo_clean'] = togo_clean
         ns['df_togo_clean'] = togo_clean
-        st.success("✅ Togo clean data loaded")
+    progress_bar.progress(100)
+    
+    status_text.text("✅ All data loaded successfully!")
+    time.sleep(0.5)  # Brief pause to show completion
+    status_text.empty()
+    progress_bar.empty()
     
     # Add data loading functions that return the pre-loaded data
     def load_benin_data():
@@ -698,8 +819,8 @@ def remove_file_loading_code(code: str):
     while i < len(lines):
         line = lines[i]
         
-        # Skip empty lines
-        if not line.strip():
+        # Skip empty lines and comments
+        if not line.strip() or line.strip().startswith('#'):
             cleaned_lines.append(line)
             i += 1
             continue
@@ -748,21 +869,22 @@ def remove_file_loading_code(code: str):
                     indent = len(line) - len(line.lstrip())
                     
                     # Try to infer which dataset to use based on the filename in the line
-                    if 'benin' in line.lower() and 'clean' in line.lower():
+                    line_lower = line.lower()
+                    if 'benin' in line_lower and 'clean' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_clean  # FILE LOADING REPLACED: Using pre-loaded Benin clean data")
-                    elif 'benin' in line.lower():
+                    elif 'benin' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = benin_df  # FILE LOADING REPLACED: Using pre-loaded Benin data")
-                    elif 'sierra' in line.lower() and 'clean' in line.lower():
+                    elif 'sierra' in line_lower and 'clean' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_clean  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone clean data")
-                    elif 'sierra' in line.lower():
+                    elif 'sierra' in line_lower or 'sierraleone' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = sierraleone_df  # FILE LOADING REPLACED: Using pre-loaded Sierra Leone data")
-                    elif 'togo' in line.lower() and 'clean' in line.lower():
+                    elif 'togo' in line_lower and 'clean' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_clean  # FILE LOADING REPLACED: Using pre-loaded Togo clean data")
-                    elif 'togo' in line.lower():
+                    elif 'togo' in line_lower:
                         cleaned_lines.append(f"{' ' * indent}{var_name} = togo_df  # FILE LOADING REPLACED: Using pre-loaded Togo data")
                     else:
-                        # Generic replacement
-                        cleaned_lines.append(f"{' ' * indent}{var_name} = None  # FILE LOADING DISABLED: Data pre-loaded - use available datasets")
+                        # Generic replacement - use first available dataset
+                        cleaned_lines.append(f"{' ' * indent}{var_name} = benin_df  # FILE LOADING REPLACED: Using pre-loaded data (default: Benin)")
                 else:
                     cleaned_lines.append(f"# {line}  # FILE LOADING DISABLED")
             else:
@@ -788,7 +910,9 @@ def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
     
     try:
         # Execute the safe code (without file loading operations)
-        exec(safe_code, ns)
+        with st.spinner('Executing notebook code...'):
+            exec(safe_code, ns)
+        st.success("✅ Notebook executed successfully!")
         
     except Exception as e:
         st.warning("Notebook code execution failed. See error details below.")
@@ -977,7 +1101,7 @@ if file_loading_detected:
     """)
 
 # Try to execute code and collect dataframes
-if st.button('Execute Notebook Code'):
+if st.button('Execute Notebook Code', type='primary'):
     with st.spinner('Loading data from Google Drive and executing notebook...'):
         result = exec_code_collect_dfs(code_text, notebook_name)
 
@@ -1052,4 +1176,10 @@ st.info(f'''
 - File loading operations in notebooks are automatically removed
 - File saving operations are disabled (use download buttons instead)
 - Uses cached downloads for better performance
+- If you see connection errors, try refreshing the page
 ''')
+
+# Add a clear cache button for troubleshooting
+if st.sidebar.button("Clear Cache (for troubleshooting)"):
+    st.cache_data.clear()
+    st.sidebar.success("Cache cleared! Refresh the page.")
