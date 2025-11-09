@@ -46,4 +46,4 @@ wheels/
 *.egg
 
 # Logs
-*.log
+*.logvenv312/
