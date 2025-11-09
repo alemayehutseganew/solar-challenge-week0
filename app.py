@@ -527,15 +527,12 @@ from typing import Dict, Any
 import sys
 import requests
 from io import BytesIO
+import re
 
 st.set_page_config(page_title="Solar Challenge EDA Dashboard", layout="wide")
 
 HEADER = "Solar Challenge EDA Dashboard — Benin / Sierra Leone / Togo / Comparison"
 st.title(HEADER)
-
-# Directory constants - adjusted based on your git status
-NOTEBOOK_DIR = "."  # Current directory since Togo_eda.ipynb is in parent
-DATA_DIR = "./data"
 
 # Google Drive File IDs for DATA files
 GDRIVE_DATA_IDS = {
@@ -590,6 +587,7 @@ def load_csv_from_gdrive(filename):
                 return pd.read_csv(file_content)
             except Exception as e:
                 st.error(f"Error loading {filename}: {str(e)}")
+                return None
     return None
 
 @st.cache_data
@@ -608,49 +606,25 @@ def load_notebook_from_gdrive(notebook_name):
 
 @st.cache_data
 def find_notebooks():
-    """Look for notebooks in local directory and Google Drive"""
+    """Look for notebooks in Google Drive only"""
     nb_paths = []
     
-    # First try local files with exact patterns
-    for pat in NOTEBOOK_PATTERNS:
-        # Try in current directory
-        full_path = os.path.join(NOTEBOOK_DIR, pat)
-        if os.path.exists(full_path):
-            nb_paths.append(full_path)
-        # Also try in parent directory (based on git status)
-        parent_path = os.path.join("..", pat)
-        if os.path.exists(parent_path):
-            nb_paths.append(parent_path)
-    
-    # If no local notebooks found, use Google Drive notebooks
-    if not nb_paths:
-        st.info("No local notebooks found. Using notebooks from Google Drive...")
-        for notebook_name in GDRIVE_NOTEBOOK_IDS.keys():
-            nb_paths.append(f"gdrive:{notebook_name}")
-    
-    # If still no notebooks found with exact patterns, search broadly locally
-    if not nb_paths:
-        # Search current directory
-        nb_paths.extend(glob.glob(os.path.join(NOTEBOOK_DIR, "*.ipynb")))
-        # Search parent directory
-        nb_paths.extend(glob.glob(os.path.join("..", "*.ipynb")))
+    # Use Google Drive notebooks exclusively
+    for notebook_name in GDRIVE_NOTEBOOK_IDS.keys():
+        nb_paths.append(f"gdrive:{notebook_name}")
     
     return sorted(list(set(nb_paths)))
 
 def extract_markdown_and_code(nb_path: str):
     """Return (markdown_text, combined_code) from notebook file."""
     try:
-        # Check if this is a Google Drive notebook
-        if nb_path.startswith("gdrive:"):
-            notebook_name = nb_path.replace("gdrive:", "")
-            notebook_content = load_notebook_from_gdrive(notebook_name)
-            if notebook_content:
-                nb = nbformat.reads(notebook_content, as_version=4)
-            else:
-                return "", ""
+        # This is always a Google Drive notebook now
+        notebook_name = nb_path.replace("gdrive:", "")
+        notebook_content = load_notebook_from_gdrive(notebook_name)
+        if notebook_content:
+            nb = nbformat.reads(notebook_content, as_version=4)
         else:
-            # Local notebook file
-            nb = nbformat.read(nb_path, as_version=4)
+            return "", ""
     except Exception as e:
         st.warning(f"Could not read notebook {nb_path}: {e}")
         return "", ""
@@ -664,77 +638,9 @@ def extract_markdown_and_code(nb_path: str):
             code_cells.append(cell.source)
     return "\n\n".join(md_cells), "\n\n".join(code_cells)
 
-def fix_data_paths_in_code(code: str):
-    """Replace ALL file loading patterns with Google Drive loading functions"""
-    # Define URL patterns to replace
-    url_patterns = [
-        # Replace URL-based loading with Google Drive
-        ("pd.read_csv('http://benin-malanville.cs.york.ac.uk/~/benin/malanville/csv/')", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv(\"http://benin-malanville.cs.york.ac.uk/~/benin/malanville/csv/\")", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv('http://sierraleone-bumbuna.cs.york.ac.uk/~/sierraleone/bumbuna/csv/')", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv(\"http://sierraleone-bumbuna.cs.york.ac.uk/~/sierraleone/bumbuna/csv/\")", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv('http://togo-dapaong.cs.york.ac.uk/~/togo/dapaong/csv/')", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-        ("pd.read_csv(\"http://togo-dapaong.cs.york.ac.uk/~/togo/dapaong/csv/\")", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-    ]
-    
-    # Define local file patterns to replace
-    local_patterns = [
-        # Replace pd.read_csv('filename.csv') with load_csv_from_gdrive('filename.csv')
-        ("pd.read_csv('benin-malanville.csv')", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv('sierraleone-bumbuna.csv')", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv('togo-dapaong_qc.csv')", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-        ("pd.read_csv('Benin_clean.csv')", "load_csv_from_gdrive('Benin_clean.csv')"),
-        ("pd.read_csv('Sierraleone_clean.csv')", "load_csv_from_gdrive('Sierraleone_clean.csv')"),
-        ("pd.read_csv('Togo_clean.csv')", "load_csv_from_gdrive('Togo_clean.csv')"),
-        
-        # Replace pd.read_csv("filename.csv") with load_csv_from_gdrive("filename.csv")
-        ('pd.read_csv("benin-malanville.csv")', 'load_csv_from_gdrive("benin-malanville.csv")'),
-        ('pd.read_csv("sierraleone-bumbuna.csv")', 'load_csv_from_gdrive("sierraleone-bumbuna.csv")'),
-        ('pd.read_csv("togo-dapaong_qc.csv")', 'load_csv_from_gdrive("togo-dapaong_qc.csv")'),
-        ('pd.read_csv("Benin_clean.csv")', 'load_csv_from_gdrive("Benin_clean.csv")'),
-        ('pd.read_csv("Sierraleone_clean.csv")', 'load_csv_from_gdrive("Sierraleone_clean.csv")'),
-        ('pd.read_csv("Togo_clean.csv")', 'load_csv_from_gdrive("Togo_clean.csv")'),
-        
-        # Replace data/ paths
-        ("pd.read_csv('data/benin-malanville.csv')", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv('data/sierraleone-bumbuna.csv')", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv('data/togo-dapaong_qc.csv')", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-        ("pd.read_csv('data/Benin_clean.csv')", "load_csv_from_gdrive('Benin_clean.csv')"),
-        ("pd.read_csv('data/Sierraleone_clean.csv')", "load_csv_from_gdrive('Sierraleone_clean.csv')"),
-        ("pd.read_csv('data/Togo_clean.csv')", "load_csv_from_gdrive('Togo_clean.csv')"),
-        
-        # Replace ../data/ paths
-        ("pd.read_csv('../data/benin-malanville.csv')", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv('../data/sierraleone-bumbuna.csv')", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv('../data/togo-dapaong_qc.csv')", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-        ("pd.read_csv('../data/Benin_clean.csv')", "load_csv_from_gdrive('Benin_clean.csv')"),
-        ("pd.read_csv('../data/Sierraleone_clean.csv')", "load_csv_from_gdrive('Sierraleone_clean.csv')"),
-        ("pd.read_csv('../data/Togo_clean.csv')", "load_csv_from_gdrive('Togo_clean.csv')"),
-        
-        # Replace ./data/ paths
-        ("pd.read_csv('./data/benin-malanville.csv')", "load_csv_from_gdrive('benin-malanville.csv')"),
-        ("pd.read_csv('./data/sierraleone-bumbuna.csv')", "load_csv_from_gdrive('sierraleone-bumbuna.csv')"),
-        ("pd.read_csv('./data/togo-dapaong_qc.csv')", "load_csv_from_gdrive('togo-dapaong_qc.csv')"),
-        ("pd.read_csv('./data/Benin_clean.csv')", "load_csv_from_gdrive('Benin_clean.csv')"),
-        ("pd.read_csv('./data/Sierraleone_clean.csv')", "load_csv_from_gdrive('Sierraleone_clean.csv')"),
-        ("pd.read_csv('./data/Togo_clean.csv')", "load_csv_from_gdrive('Togo_clean.csv')"),
-    ]
-    
-    fixed_code = code
-    
-    # First replace URL patterns (they're more specific)
-    for old, new in url_patterns:
-        fixed_code = fixed_code.replace(old, new)
-    
-    # Then replace local file patterns
-    for old, new in local_patterns:
-        fixed_code = fixed_code.replace(old, new)
-    
-    return fixed_code
-
-def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
-    """Execute code in a restricted namespace and collect pandas DataFrames."""
-    ns: Dict[str, Any] = {}
+def create_safe_execution_environment():
+    """Create a completely safe execution environment with pre-loaded data"""
+    ns = {}
     
     # Provide essential imports
     ns['pd'] = pd
@@ -745,28 +651,73 @@ def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
     ns['st'] = st
     ns['requests'] = requests
     ns['BytesIO'] = BytesIO
+    ns['np'] = __import__('numpy')
     
-    # Fix data paths in the code before execution - REPLACE with Google Drive functions
-    fixed_code = fix_data_paths_in_code(code)
+    # Pre-load ALL data files into the namespace
+    st.info("📥 Loading all data files from Google Drive...")
     
-    # Add data loading helper functions to namespace that use Google Drive
+    # Load Benin data
+    benin_data = load_csv_from_gdrive("benin-malanville.csv")
+    if benin_data is not None:
+        ns['benin_df'] = benin_data
+        ns['df_benin'] = benin_data
+        ns['benin_data'] = benin_data
+        st.success("✅ Benin data loaded")
+    
+    # Load Sierra Leone data
+    sierra_data = load_csv_from_gdrive("sierraleone-bumbuna.csv")
+    if sierra_data is not None:
+        ns['sierraleone_df'] = sierra_data
+        ns['df_sierra'] = sierra_data
+        ns['sierra_data'] = sierra_data
+        ns['sierraleone_data'] = sierra_data
+        st.success("✅ Sierra Leone data loaded")
+    
+    # Load Togo data
+    togo_data = load_csv_from_gdrive("togo-dapaong_qc.csv")
+    if togo_data is not None:
+        ns['togo_df'] = togo_data
+        ns['df_togo'] = togo_data
+        ns['togo_data'] = togo_data
+        st.success("✅ Togo data loaded")
+    
+    # Load clean data versions
+    benin_clean = load_csv_from_gdrive("Benin_clean.csv")
+    if benin_clean is not None:
+        ns['benin_clean'] = benin_clean
+        ns['df_benin_clean'] = benin_clean
+        st.success("✅ Benin clean data loaded")
+    
+    sierra_clean = load_csv_from_gdrive("Sierraleone_clean.csv")
+    if sierra_clean is not None:
+        ns['sierraleone_clean'] = sierra_clean
+        ns['df_sierra_clean'] = sierra_clean
+        st.success("✅ Sierra Leone clean data loaded")
+    
+    togo_clean = load_csv_from_gdrive("Togo_clean.csv")
+    if togo_clean is not None:
+        ns['togo_clean'] = togo_clean
+        ns['df_togo_clean'] = togo_clean
+        st.success("✅ Togo clean data loaded")
+    
+    # Add data loading functions that return the pre-loaded data
     def load_benin_data():
-        return load_csv_from_gdrive("benin-malanville.csv")
+        return ns.get('benin_df')
     
     def load_sierraleone_data():
-        return load_csv_from_gdrive("sierraleone-bumbuna.csv")
+        return ns.get('sierraleone_df')
     
     def load_togo_data():
-        return load_csv_from_gdrive("togo-dapaong_qc.csv")
+        return ns.get('togo_df')
     
     def load_benin_clean():
-        return load_csv_from_gdrive("Benin_clean.csv")
+        return ns.get('benin_clean')
     
     def load_sierraleone_clean():
-        return load_csv_from_gdrive("Sierraleone_clean.csv")
+        return ns.get('sierraleone_clean')
     
     def load_togo_clean():
-        return load_csv_from_gdrive("Togo_clean.csv")
+        return ns.get('togo_clean')
     
     # Add helper functions to namespace
     ns['load_benin_data'] = load_benin_data
@@ -776,21 +727,43 @@ def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
     ns['load_sierraleone_clean'] = load_sierraleone_clean
     ns['load_togo_clean'] = load_togo_clean
     
-    # Add the main Google Drive loading function
-    ns['load_csv_from_gdrive'] = load_csv_from_gdrive
+    return ns
+
+def remove_file_loading_code(code: str):
+    """Remove all file loading code from the notebook and replace with comments"""
+    # Patterns to remove (file loading operations)
+    patterns_to_remove = [
+        r"pd\.read_csv\([^)]+\)",
+        r"pd\.read_excel\([^)]+\)",
+        r"pd\.read_json\([^)]+\)",
+        r"open\([^)]+\)",
+        r"with open\([^)]+\)",
+    ]
     
-    # Add directory constants to namespace
-    ns['NOTEBOOK_DIR'] = NOTEBOOK_DIR
-    ns['DATA_DIR'] = DATA_DIR
+    cleaned_code = code
+    for pattern in patterns_to_remove:
+        # Replace file loading operations with comments
+        cleaned_code = re.sub(
+            pattern, 
+            "# FILE LOADING REMOVED: Data is pre-loaded from Google Drive", 
+            cleaned_code, 
+            flags=re.IGNORECASE
+        )
     
-    # Add Google Drive file IDs to namespace
-    ns['GDRIVE_DATA_IDS'] = GDRIVE_DATA_IDS
-    ns['GDRIVE_NOTEBOOK_IDS'] = GDRIVE_NOTEBOOK_IDS
-    ns['download_from_gdrive'] = download_from_gdrive
+    return cleaned_code
+
+def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
+    """Execute code in a safe environment with pre-loaded data"""
+    
+    # Create safe environment with pre-loaded data
+    ns = create_safe_execution_environment()
+    
+    # Remove file loading code to prevent errors
+    safe_code = remove_file_loading_code(code)
     
     try:
-        # Execute the fixed code
-        exec(fixed_code, ns)
+        # Execute the safe code (without file loading operations)
+        exec(safe_code, ns)
         
     except Exception as e:
         st.warning("Notebook code execution failed. See error details below.")
@@ -800,13 +773,13 @@ def exec_code_collect_dfs(code: str, notebook_name: str) -> Dict[str, Any]:
         with st.expander("Detailed Error Traceback"):
             st.code(traceback.format_exc())
         
-        # Show what the fixed code looks like
-        with st.expander("See Fixed Code That Was Executed"):
-            st.code(fixed_code)
+        # Show what code was executed
+        with st.expander("See Code That Was Executed"):
+            st.code(safe_code)
     
     # collect dataframes
     dfs = {k: v for k, v in ns.items() if isinstance(v, pd.DataFrame)}
-    return {'namespace': ns, 'dataframes': dfs, 'fixed_code': fixed_code}
+    return {'namespace': ns, 'dataframes': dfs, 'safe_code': safe_code}
 
 def list_csvs():
     """List available CSV files from Google Drive"""
@@ -893,31 +866,14 @@ csv_files = list_csvs()
 # Debug information
 with st.sidebar.expander("Debug Info"):
     st.write("Current working directory:", os.getcwd())
-    st.write("Found notebooks:", [os.path.basename(nb) if not nb.startswith('gdrive:') else nb for nb in notebooks])
+    st.write("Found notebooks:", [nb.replace('gdrive:', '') for nb in notebooks])
     st.write("Available CSV files from Google Drive:", csv_files)
-    st.write("Available notebooks from Google Drive:", list(GDRIVE_NOTEBOOK_IDS.keys()))
-
-if not notebooks:
-    st.error(f'No notebooks found. Looking for: {NOTEBOOK_PATTERNS}')
-    
-    # Show directory contents for debugging
-    st.info("Current directory contents:")
-    for item in os.listdir("."):
-        st.write(f"- {item}")
-    
-    st.info("Parent directory contents:")
-    for item in os.listdir(".."):
-        st.write(f"- {item}")
-    st.stop()
 
 # Map simple labels for the user
 label_map = {}
 for nb in notebooks:
-    if nb.startswith("gdrive:"):
-        notebook_name = nb.replace("gdrive:", "")
-        base = notebook_name.lower()
-    else:
-        base = os.path.basename(nb).lower()
+    notebook_name = nb.replace("gdrive:", "")
+    base = notebook_name.lower()
         
     if 'benin' in base:
         label_map['Benin Analysis'] = nb
@@ -928,20 +884,14 @@ for nb in notebooks:
     elif 'compare' in base:
         label_map['Country Comparison'] = nb
     else:
-        if nb.startswith("gdrive:"):
-            label_map[notebook_name] = nb
-        else:
-            label_map[os.path.splitext(os.path.basename(nb))[0]] = nb
+        label_map[notebook_name] = nb
 
 selection = st.sidebar.selectbox('Choose analysis to view', options=list(label_map.keys()))
 nb_path = label_map[selection]
 
 # Display notebook source information
-if nb_path.startswith("gdrive:"):
-    notebook_name = nb_path.replace("gdrive:", "")
-    st.markdown(f"**Notebook:** `{notebook_name}` (from Google Drive)")
-else:
-    st.markdown(f"**Notebook:** `{os.path.basename(nb_path)}` (from `{os.path.dirname(nb_path) or 'current dir'}`)")
+notebook_name = nb_path.replace("gdrive:", "")
+st.markdown(f"**Notebook:** `{notebook_name}` (from Google Drive)")
 
 # Display available CSV files in sidebar
 if csv_files:
@@ -957,26 +907,35 @@ if md_text:
     with st.expander('Notebook markdown (click to expand)'):
         st.markdown(md_text)
 
-# Show fixed code (for debugging) - UPDATED to show the actual fixed code
-with st.expander('Show fixed code (for debugging)'):
-    fixed_code = fix_data_paths_in_code(code_text)
-    st.code(fixed_code)
-    st.info("Note: All file paths and URLs have been replaced with Google Drive loading functions")
+# Show cleaned code (for debugging)
+with st.expander('Show cleaned code (for debugging)'):
+    safe_code = remove_file_loading_code(code_text)
+    st.code(safe_code)
+    st.info("Note: All file loading operations have been removed. Data is pre-loaded from Google Drive.")
 
 # Try to execute code and collect dataframes
 if st.button('Execute Notebook Code'):
-    with st.spinner('Executing notebook code (with Google Drive data)...'):
-        result = exec_code_collect_dfs(code_text, os.path.basename(nb_path) if not nb_path.startswith('gdrive:') else nb_path.replace('gdrive:', ''))
+    with st.spinner('Loading data from Google Drive and executing notebook...'):
+        result = exec_code_collect_dfs(code_text, notebook_name)
 
     dfs = result.get('dataframes', {})
-    if dfs:
-        st.success(f'Found {len(dfs)} DataFrame(s) in the executed notebook.')
+    
+    # Filter out the pre-loaded dataframes to show only newly created ones
+    preloaded_names = ['benin_df', 'df_benin', 'benin_data', 'sierraleone_df', 'df_sierra', 
+                      'sierra_data', 'sierraleone_data', 'togo_df', 'df_togo', 'togo_data',
+                      'benin_clean', 'df_benin_clean', 'sierraleone_clean', 'df_sierra_clean',
+                      'togo_clean', 'df_togo_clean']
+    
+    new_dfs = {k: v for k, v in dfs.items() if k not in preloaded_names}
+    
+    if new_dfs:
+        st.success(f'Found {len(new_dfs)} newly created DataFrame(s) in the executed notebook.')
         
-        # Display all dataframes in tabs
-        tab_names = list(dfs.keys())
+        # Display all new dataframes in tabs
+        tab_names = list(new_dfs.keys())
         tabs = st.tabs([f"📊 {name}" for name in tab_names])
         
-        for i, (df_name, df) in enumerate(dfs.items()):
+        for i, (df_name, df) in enumerate(new_dfs.items()):
             with tabs[i]:
                 show_dataframe_eda(df, name=df_name)
                 
@@ -990,43 +949,20 @@ if st.button('Execute Notebook Code'):
                     key=f"download_{df_name}_{i}"
                 )
     else:
-        st.info('No DataFrame objects were created by executing the notebook.')
+        st.info('No new DataFrame objects were created by executing the notebook.')
+        st.info('Showing pre-loaded dataframes instead:')
         
-        # Fallback: Load data based on selected notebook
-        st.info('Trying to load data files directly from Google Drive...')
+        # Show pre-loaded dataframes
+        preloaded_dfs = {k: v for k, v in result['namespace'].items() 
+                        if k in preloaded_names and isinstance(v, pd.DataFrame)}
         
-        # Map notebook types to possible data files
-        notebook_data_map = {
-            'benin': ['benin-malanville.csv', 'Benin_clean.csv'],
-            'sierra': ['sierraleone-bumbuna.csv', 'Sierraleone_clean.csv'],
-            'togo': ['togo-dapaong_qc.csv', 'Togo_clean.csv']
-        }
-        
-        loaded = False
-        for key, files in notebook_data_map.items():
-            if key in selection.lower():
-                for data_file in files:
-                    if data_file in GDRIVE_DATA_IDS:
-                        try:
-                            df_csv = load_csv_from_gdrive(data_file)
-                            if df_csv is not None:
-                                st.success(f"Loaded from Google Drive: {data_file}")
-                                show_dataframe_eda(df_csv, name=data_file)
-                                loaded = True
-                        except Exception as e:
-                            st.error(f"Failed to load {data_file}: {e}")
-        
-        if not loaded and csv_files:
-            st.warning("Could not load specific files. Try loading any available CSV:")
-            for csv_file in csv_files[:3]:  # Try first 3 CSVs
-                try:
-                    df_csv = load_csv_from_gdrive(csv_file)
-                    if df_csv is not None:
-                        st.success(f"Loaded: {csv_file}")
-                        show_dataframe_eda(df_csv, name=csv_file)
-                        break
-                except Exception as e:
-                    st.error(f"Failed to load {csv_file}: {e}")
+        if preloaded_dfs:
+            tab_names = list(preloaded_dfs.keys())
+            tabs = st.tabs([f"📊 {name}" for name in tab_names])
+            
+            for i, (df_name, df) in enumerate(preloaded_dfs.items()):
+                with tabs[i]:
+                    show_dataframe_eda(df, name=df_name)
 
 # Quick CSV loader in sidebar
 st.sidebar.subheader("Quick CSV Loader")
@@ -1047,10 +983,9 @@ if csv_files:
 st.markdown('---')
 st.info(f'''
 **Notes:** 
-- This app searches for notebooks in current directory and Google Drive
-- Data files are loaded from Google Drive (bypassing GitHub size limits)
-- Notebook files can also be loaded from Google Drive if not found locally
-- All file paths AND URL-based loading in notebook code are automatically replaced with Google Drive loading functions
-- Use the Quick CSV Loader if notebook execution fails
-- Google Drive files are cached for better performance
+- All notebooks and data files are loaded directly from Google Drive
+- No local file access - completely bypasses file system errors
+- Data is pre-loaded before notebook execution
+- File loading operations in notebooks are automatically removed
+- Uses cached downloads for better performance
 ''')
