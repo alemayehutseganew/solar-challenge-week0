@@ -1101,10 +1101,10 @@ if md_text:
         st.markdown(md_text)
 
 # Show cleaned code (for debugging) - cached
-with st.expander('Show cleaned code (for debugging)'):
-    safe_code = remove_file_loading_code(code_text)
-    st.code(safe_code)
-    st.info("Note: All file loading operations have been removed. Data is pre-loaded from source.")
+# with st.expander('Show cleaned code (for debugging)'):
+#     safe_code = remove_file_loading_code(code_text)
+#     st.code(safe_code)
+#     st.info("Note: All file loading operations have been removed. Data is pre-loaded from source.")
 
 # Try to execute code and collect dataframes
 if st.button('Execute Notebook Code', type='primary'):
